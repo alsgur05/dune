@@ -14,19 +14,21 @@ const POSITION map_pos = { 1, 0 };
 const POSITION sys_pos = { 20, 0 };
 const POSITION status_pos = { 1, 62 };
 const POSITION cmd_pos = { 20, 62 };
-
+const POSITION sta_map_pos = { 2, 63 };
+//버퍼
 char backbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
 char frontbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
-
+//시스템 메세지창
 char sys_backbuf[SYS_HEIGHT][SYS_WIDTH] = { 0 };
 char sys_frontbuf[SYS_HEIGHT][SYS_WIDTH] = { 0 };
-
+//유닛 상태창
 char status_backbuf[STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
 char status_frontbuf[STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
-
+//명령창
 char cmd_backbuf[CMD_HEIGHT][CMD_WIDTH] = { 0 };
 char cmd_frontbuf[CMD_HEIGHT][CMD_WIDTH] = { 0 };
-
+//위치의 색을 저장하는 colorbuf
+int colorbuf[MAP_HEIGHT][MAP_WIDTH] = { 7 };
 
 void project(char src[N_LAYER][MAP_HEIGHT][MAP_WIDTH], char dest[MAP_HEIGHT][MAP_WIDTH]);
 void display_resource(RESOURCE resource);
@@ -36,6 +38,7 @@ void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
 void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]);
+void lear_sta_map_area();
 
 void display(
 	RESOURCE resource,
@@ -90,8 +93,6 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 				formation(i, j, backbuf); // 진형 배치
 				gotoxy(padd(map_pos, pos));  // 위치 이동
 				printf("%c", backbuf[i][j]);  // 문자 출력
-
-				//set_color(7);  // 기본 색상으로 초기화
 			}
 			frontbuf[i][j] = backbuf[i][j];
 		}
@@ -99,40 +100,14 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 }
 
 // frontbuf[][]에서 커서 위치의 문자를 색만 바꿔서 그대로 다시 출력
+
 void display_cursor(CURSOR cursor) {
 	POSITION prev = cursor.previous;
 	POSITION curr = cursor.current;
 
-	// 이전 위치의 문자를 원래 색상으로 출력
+	// 이전 위치의 문자와 색상 설정
 	char ch = frontbuf[prev.row][prev.column];
-	int color = 7;  // 기본 흰색으로 초기화
-
-	// 이전 위치의 문자에 따른 색상 설정
-	if (ch == 'P') {
-		color = BLACK;  // 파란색
-	}
-	else if (ch == 'B') {
-		color = (prev.row == 16 || prev.row == 15) ? BLUE : DARK_RED;  // 파란색 또는 빨간색
-	}
-	else if (ch == 'R')
-	{
-		color = GRAY;
-	}
-	else if (ch == 'S')
-	{
-		color = RED;
-	}
-	else if (ch == 'W')
-	{
-		color = DARK_YELLOW;
-	}
-	else if (ch == 'H')
-	{
-		color = (prev.row == 14) ? BLUE : DARK_RED;
-	}
-	else {
-		color = 7;  // 기본 흰색
-	}
+	int color = get_color_for_char(ch, prev);
 
 	set_color(color);  // 이전 위치 색상 설정
 	printc(padd(map_pos, prev), ch, color);
@@ -143,7 +118,7 @@ void display_cursor(CURSOR cursor) {
 	printc(padd(map_pos, curr), ch, COLOR_CURSOR);
 
 	// 색상 초기화
-	set_color(7);
+	set_color(COLOR_DEFAULT);
 }
 
 
@@ -202,6 +177,39 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 		}
 	}
 }
+
+//스페이스바 누르면 상태창에 내용 출력
+void display_info_in_sta_map(char ch, POSITION pos) {
+	//sta_map 창을 지워서 이전 출력 지움
+	clear_sta_map_area();
+	// sta_map 창에 커서가 위치한 배치의 정보 출력
+	const char* info;
+	switch (ch) {
+	case 'P': info = "장판"; break;
+	case 'B':
+		info = is_enemy_map[pos.row][pos.column] ? "적 진형" : "아군 진형";
+		break;
+	case 'R': info = "바위"; break; //나중에 2x2는 바위, 1x1은 돌맹이
+	case 'S': info = "스파이스"; break;
+	case 'W': info = "샌드웜"; break;
+	case 'H': info = "하베스터"; break;
+	default: info = "사막 지형"; break;
+	}
+
+	gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column }); // sta_map 창 위치로 이동
+	printf("%s (좌표 : %d, %d)", info, pos.row, pos.column);
+}
+
+//상태창 내용을 지우는 함수
+void clear_sta_map_area() { 
+	for (int i = 0; i < STATUS_HEIGHT; i++) {
+		gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column });
+		for (int j = 0; j < STATUS_WIDTH - 2; j++) {
+			printf(" ");
+		}
+	}
+}
+
 
 void project_cmd_map(char src[N_LAYER][CMD_HEIGHT][CMD_WIDTH], char dest[CMD_HEIGHT][CMD_WIDTH]) {
 	for (int k = 0; k < N_LAYER; k++) {

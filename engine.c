@@ -16,6 +16,9 @@ void sample_obj_move(void);
 POSITION sample_obj_next_position(void);
 void init_map(void);
 
+extern const POSITION map_pos;
+extern char frontbuf[MAP_HEIGHT][MAP_WIDTH];
+extern char colorbuf[MAP_HEIGHT][MAP_WIDTH];
 
 /* ================= control =================== */
 int sys_clock = 0;		// system-wide clock(ms)
@@ -27,6 +30,7 @@ char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH] = { 0 };
 char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH] = { 0 };
 char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
 char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH] = { 0 };
+bool is_enemy_map[MAP_HEIGHT][MAP_WIDTH] = { {false} }; 
 
 RESOURCE resource = {
 	.spice = 0,
@@ -61,8 +65,21 @@ int main(void) {
 		KEY key = get_key();
 
 		// 키 입력이 있으면 처리
-		if (is_arrow_key(key)) {
-			cursor_move(ktod(key));
+		if (is_arrow_key(key) || (key >= k_up_double && key <= k_down_double)) {
+			DIRECTION dir = (key >= k_up_double) ? ktod(key - 10) : ktod(key);  // 이중 입력 처리
+			cursor_move(dir);
+			if (key >= k_up_double) {  // 이중 입력이면 추가로 2칸 이동
+				cursor_move(dir);
+				cursor_move(dir);
+			}
+		}
+		else if (key == k_space) {
+			// 스페이스바가 눌렸을 때, 현재 위치의 정보를 sta_map에 표시
+			char ch = frontbuf[cursor.current.row][cursor.current.column];
+			display_info_in_sta_map(ch, cursor.current);
+		}
+		else if (key == k_esc) {
+			clear_sta_map_area();
 		}
 		else {
 			// 방향키 외의 입력
@@ -185,19 +202,75 @@ void cmd_init(void) {
 		}
 	}
 }
+
+int get_color_for_char(char ch, POSITION pos) {
+	int color = COLOR_DEFAULT;
+
+	if (ch == 'P') {
+		color = BLACK;
+	}
+	else if (ch == 'B') {
+		color = (pos.row == 16 || pos.row == 15) ? BLUE : DARK_RED;
+	}
+	else if (ch == 'R') {
+		color = GRAY;
+	}
+	else if (ch == 'S') {
+		color = RED;
+	}
+	else if (ch == 'W') {
+		color = DARK_YELLOW;
+	}
+	else if (ch == 'H') {
+		color = (pos.row == 14) ? BLUE : DARK_RED;
+	}
+
+	return color;
+}
+
 // (가능하다면) 지정한 방향으로 커서 이동
 void cursor_move(DIRECTION dir) {
 	POSITION curr = cursor.current;
 	POSITION new_pos = pmove(curr, dir);
 
-	// validation check
-	if (1 <= new_pos.row && new_pos.row <= MAP_HEIGHT - 2 && \
-		1 <= new_pos.column && new_pos.column <= MAP_WIDTH - 2) {
+	// 현재 위치 초기화 (진형 색상 유지)
+	char ch = frontbuf[cursor.previous.row][cursor.previous.column];
+	int prev_color = get_color_for_char(ch, cursor.previous);
+	printc(padd(map_pos, cursor.previous), ch, prev_color);
 
+	// validation check
+	if (1 <= new_pos.row && new_pos.row <= MAP_HEIGHT - 2 &&
+		1 <= new_pos.column && new_pos.column <= MAP_WIDTH - 2) {
+		cursor.previous = cursor.current;
+		cursor.current = new_pos;
+	}
+
+	if (dir == k_up_double) {
+		new_pos = pmove(cursor.current, d_up);
+		new_pos = pmove(new_pos, d_up);
+	}
+	else if (dir == k_down_double) {
+		new_pos = pmove(cursor.current, d_down);
+		new_pos = pmove(new_pos, d_down);
+	}
+	else if (dir == k_left_double) {
+		new_pos = pmove(cursor.current, d_left);
+		new_pos = pmove(new_pos, d_left);
+	}
+	else if (dir == k_right_double) {
+		new_pos = pmove(cursor.current, d_right);
+		new_pos = pmove(new_pos, d_right);
+	}
+
+	// 범위 내인지 확인 후 최종 위치로 이동
+	if (1 <= new_pos.row && new_pos.row <= MAP_HEIGHT - 2 &&
+		1 <= new_pos.column && new_pos.column <= MAP_WIDTH - 2) {
 		cursor.previous = cursor.current;
 		cursor.current = new_pos;
 	}
 }
+
+
 
 /* ================= sample object movement =================== */
 POSITION sample_obj_next_position(void) {
@@ -288,6 +361,19 @@ void init_map(void) {
 	map[1][2][58] = 'B';
 	map[1][1][57] = 'B';
 	map[1][2][57] = 'B';
+
+	// 좌하단 본진을 아군으로 설정
+	is_enemy_map[16][1] = false;
+	is_enemy_map[16][2] = false;
+	is_enemy_map[15][1] = false;
+	is_enemy_map[15][2] = false;
+
+	// 우상단 본진을 적군으로 설정
+	is_enemy_map[1][58] = true;
+	is_enemy_map[2][58] = true;
+	is_enemy_map[1][57] = true;
+	is_enemy_map[2][57] = true;
+
 	//좌하단 하베스터
 	map[1][14][1] = 'H';
 	//우상단 하베스터
