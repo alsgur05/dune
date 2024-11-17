@@ -100,4 +100,14 @@ typedef struct {
 	int speed;
 } OBJECT_SAMPLE;
 
+enum ColorType {
+	RED = 12, //하코넨(AI)
+	GRAY = 8, //돌
+	BLUE = 9, //아트레이디스(플레이어)
+	DARK_YELLOW = 6, //샌드웜
+	DARK_RED = 4, //스파이스
+	BLACK = 0 //장판
+
+} COLOR ;
+
 #endif

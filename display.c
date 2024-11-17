@@ -35,6 +35,7 @@ void display_cursor(CURSOR cursor);
 void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
+void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]);
 
 void display(
 	RESOURCE resource,
@@ -86,7 +87,11 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 		for (int j = 0; j < MAP_WIDTH; j++) {
 			if (frontbuf[i][j] != backbuf[i][j]) {
 				POSITION pos = { i, j };
-				printc(padd(map_pos, pos), backbuf[i][j], COLOR_DEFAULT);
+				formation(i, j, backbuf); // 진형 배치
+				gotoxy(padd(map_pos, pos));  // 위치 이동
+				printf("%c", backbuf[i][j]);  // 문자 출력
+
+				//set_color(7);  // 기본 색상으로 초기화
 			}
 			frontbuf[i][j] = backbuf[i][j];
 		}
@@ -98,12 +103,49 @@ void display_cursor(CURSOR cursor) {
 	POSITION prev = cursor.previous;
 	POSITION curr = cursor.current;
 
+	// 이전 위치의 문자를 원래 색상으로 출력
 	char ch = frontbuf[prev.row][prev.column];
-	printc(padd(map_pos, prev), ch, COLOR_DEFAULT);
+	int color = 7;  // 기본 흰색으로 초기화
 
+	// 이전 위치의 문자에 따른 색상 설정
+	if (ch == 'P') {
+		color = BLACK;  // 파란색
+	}
+	else if (ch == 'B') {
+		color = (prev.row == 16 || prev.row == 15) ? BLUE : DARK_RED;  // 파란색 또는 빨간색
+	}
+	else if (ch == 'R')
+	{
+		color = GRAY;
+	}
+	else if (ch == 'S')
+	{
+		color = RED;
+	}
+	else if (ch == 'W')
+	{
+		color = DARK_YELLOW;
+	}
+	else if (ch == 'H')
+	{
+		color = (prev.row == 14) ? BLUE : DARK_RED;
+	}
+	else {
+		color = 7;  // 기본 흰색
+	}
+
+	set_color(color);  // 이전 위치 색상 설정
+	printc(padd(map_pos, prev), ch, color);
+
+	// 현재 커서 위치의 문자를 커서 색상으로 출력
 	ch = frontbuf[curr.row][curr.column];
+	set_color(COLOR_CURSOR);  // 커서 색상 설정
 	printc(padd(map_pos, curr), ch, COLOR_CURSOR);
+
+	// 색상 초기화
+	set_color(7);
 }
+
 
 void project_sys_map(char src[N_LAYER][SYS_HEIGHT][SYS_WIDTH], char dest[SYS_HEIGHT][SYS_WIDTH]) {
 	for (int k = 0; k < N_LAYER; k++) {
@@ -185,5 +227,29 @@ void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]) {
 			}
 			cmd_frontbuf[i][j] = cmd_backbuf[i][j];
 		}
+	}
+}
+
+void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]) {
+	if (backbuf[i][j] == 'P') { set_color(BLACK); }
+	else if (backbuf[i][j] == 'B') {
+		if (i == 16 || i == 15) { set_color(BLUE); }
+		else { set_color(DARK_RED); }
+	}
+	else if (backbuf[i][j] == 'H') {
+		if (i == 14) { set_color(BLUE); }
+		else { set_color(DARK_RED); }
+	}
+	else if (backbuf[i][j] == 'W') {
+		set_color(DARK_YELLOW);
+	}
+	else if (backbuf[i][j] == 'R') {
+		set_color(GRAY);
+	}
+	else if (backbuf[i][j] == 'S') {
+		set_color(RED);
+	}
+	else {
+		set_color(7);  // 기본 흰색
 	}
 }

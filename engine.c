@@ -14,6 +14,7 @@ void outro(void);
 void cursor_move(DIRECTION dir);
 void sample_obj_move(void);
 POSITION sample_obj_next_position(void);
+void init_map(void);
 
 
 /* ================= control =================== */
@@ -51,6 +52,7 @@ int main(void) {
 	sta_init();
 	cmd_init();
 	intro();
+	init_map();
 	display(resource, map, cursor, system_map, status_map, command_map);
 
 
@@ -253,4 +255,72 @@ void sample_obj_move(void) {
 	map[1][obj.pos.row][obj.pos.column] = obj.repr;
 
 	obj.next_move_time = sys_clock + obj.speed;
+}
+
+void init_map(void) {
+	//좌하단 본진 장판
+	//B, P layer 0 이라고 해서 일단 주석
+	/*
+	map[0][16][1] = 'P';
+	map[0][16][2] = 'P';
+	map[0][15][1] = 'P';
+	map[0][15][2] = 'P';
+
+	//우상단 본진 장판
+	map[0][1][58] = 'P';
+	map[0][2][58] = 'P';
+	map[0][1][57] = 'P';
+	map[0][2][57] = 'P';
+	*/
+	//좌하단 장판
+	map[0][16][3] = 'P';
+	map[0][16][4] = 'P';
+	map[0][15][3] = 'P';
+	map[0][15][4] = 'P';
+	//좌하단 본진
+	map[0][16][1] = 'B';
+	map[0][16][2] = 'B';
+	map[0][15][1] = 'B';
+	map[0][15][2] = 'B';
+	
+	//우상단 본진
+	map[1][1][58] = 'B';
+	map[1][2][58] = 'B';
+	map[1][1][57] = 'B';
+	map[1][2][57] = 'B';
+	//좌하단 하베스터
+	map[1][14][1] = 'H';
+	//우상단 하베스터
+	map[1][3][58] = 'H';
+	
+	//좌하단 스파이스
+	map[0][12][1] = 'S';
+	//우상단 스파이스
+	map[0][5][58] = 'S';
+
+	//바위 (2x2)
+	map[0][13][15] = 'R';
+	map[0][12][15] = 'R';
+	map[0][13][16] = 'R';
+	map[0][12][16] = 'R';
+
+	map[0][8][33] = 'R';
+	map[0][9][33] = 'R';
+	map[0][8][32] = 'R';
+	map[0][9][32] = 'R';
+
+	map[0][4][49] = 'R';
+	map[0][4][48] = 'R';
+	map[0][5][49] = 'R';
+	map[0][5][48] = 'R';
+
+	//바위 (1x1)
+	map[0][14][32] = 'R';
+	map[0][6][15] = 'R';
+	map[0][3][23]= 'R';
+	map[0][15][48]= 'R';
+
+	//샌드웜
+	map[1][3][8] = 'W';
+	map[1][13][50] = 'W';
 }
