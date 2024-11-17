@@ -20,7 +20,14 @@
 void display(
 	RESOURCE resource,
 	char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH],
-	CURSOR cursor
+	CURSOR cursor,
+	char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH],
+	char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH],
+	char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]
 );
+
+void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
+void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
+void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
 
 #endif

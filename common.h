@@ -14,6 +14,14 @@
 #define MAP_WIDTH	60
 #define MAP_HEIGHT	18
 
+#define SYS_WIDTH 60
+#define SYS_HEIGHT 8
+
+#define STATUS_WIDTH 45
+#define STATUS_HEIGHT 18
+
+#define CMD_WIDTH 45
+#define CMD_HEIGHT 8
 
 /* ================= 위치와 방향 =================== */
 // 맵에서 위치를 나타내는 구조체

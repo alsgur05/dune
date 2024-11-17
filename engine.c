@@ -6,6 +6,9 @@
 #include "display.h"
 
 void init(void);
+void sys_init(void);
+void sta_init(void);
+void cmd_init(void);
 void intro(void);
 void outro(void);
 void cursor_move(DIRECTION dir);
@@ -20,6 +23,9 @@ CURSOR cursor = { { 1, 1 }, {1, 1} };
 
 /* ================= game data =================== */
 char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH] = { 0 };
+char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH] = { 0 };
+char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
+char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH] = { 0 };
 
 RESOURCE resource = {
 	.spice = 0,
@@ -41,8 +47,12 @@ int main(void) {
 	srand((unsigned int)time(NULL));
 
 	init();
+	sys_init();
+	sta_init();
+	cmd_init();
 	intro();
-	display(resource, map, cursor);
+	display(resource, map, cursor, system_map, status_map, command_map);
+
 
 	while (1) {
 		// loop 돌 때마다(즉, TICK==10ms마다) 키 입력 확인
@@ -66,11 +76,12 @@ int main(void) {
 		sample_obj_move();
 
 		// 화면 출력
-		display(resource, map, cursor);
+		display(resource, map, cursor, system_map, status_map, command_map);
 		Sleep(TICK);
 		sys_clock += 10;
 	}
 }
+
 
 /* ================= subfunctions =================== */
 void intro(void) {
@@ -109,7 +120,69 @@ void init(void) {
 	// object sample
 	map[1][obj.pos.row][obj.pos.column] = 'o';
 }
+void sys_init(void) {
+	for (int j = 0; j < SYS_WIDTH; j++) {
+		system_map[0][0][j] = '#';
+		system_map[0][SYS_HEIGHT - 1][j] = '#';
+	}
 
+	for (int i = 1; i < SYS_HEIGHT - 1; i++) {
+		system_map[0][i][0] = '#';
+		system_map[0][i][SYS_WIDTH - 1] = '#';
+		for (int j = 1; j < SYS_WIDTH - 1; j++) {
+			system_map[0][i][j] = ' ';
+		}
+	}
+
+	// layer 1(map[1])은 비워 두기(-1로 채움)
+	for (int i = 0; i < SYS_HEIGHT; i++) {
+		for (int j = 0; j < SYS_WIDTH; j++) {
+			system_map[1][i][j] = -1;
+		}
+	}
+}
+void sta_init(void) {
+	for (int j = 0; j < STATUS_WIDTH; j++) {
+		status_map[0][0][j] = '#';
+		status_map[0][STATUS_HEIGHT - 1][j] = '#';
+	}
+
+	for (int i = 1; i < STATUS_HEIGHT - 1; i++) {
+		status_map[0][i][0] = '#';
+		status_map[0][i][STATUS_WIDTH - 1] = '#';
+		for (int j = 1; j < STATUS_WIDTH - 1; j++) {
+			status_map[0][i][j] = ' ';
+		}
+	}
+
+	// layer 1(map[1])은 비워 두기(-1로 채움)
+	for (int i = 0; i < STATUS_HEIGHT; i++) {
+		for (int j = 0; j < STATUS_WIDTH; j++) {
+			status_map[1][i][j] = -1;
+		}
+	}
+}
+void cmd_init(void) {
+	for (int j = 0; j < CMD_WIDTH; j++) {
+		command_map[0][0][j] = '#';
+		command_map[0][CMD_HEIGHT - 1][j] = '#';
+	}
+
+	for (int i = 1; i < CMD_HEIGHT - 1; i++) {
+		command_map[0][i][0] = '#';
+		command_map[0][i][CMD_WIDTH - 1] = '#';
+		for (int j = 1; j < CMD_WIDTH - 1; j++) {
+			command_map[0][i][j] = ' ';
+		}
+	}
+
+	// layer 1(map[1])은 비워 두기(-1로 채움)
+	for (int i = 0; i < CMD_HEIGHT; i++) {
+		for (int j = 0; j < CMD_WIDTH; j++) {
+			command_map[1][i][j] = -1;
+		}
+	}
+}
 // (가능하다면) 지정한 방향으로 커서 이동
 void cursor_move(DIRECTION dir) {
 	POSITION curr = cursor.current;
