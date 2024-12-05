@@ -14,7 +14,10 @@ const POSITION map_pos = { 1, 0 };
 const POSITION sys_pos = { 20, 0 };
 const POSITION status_pos = { 1, 62 };
 const POSITION cmd_pos = { 20, 62 };
+//이 밑으로 출력 좌표
 const POSITION sta_map_pos = { 2, 63 };
+const POSITION cmd_map_pos = { 21,63 };
+const POSITION sys_map_pos = { 21, 1 };
 //버퍼
 char backbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
 char frontbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
@@ -37,8 +40,27 @@ void display_cursor(CURSOR cursor);
 void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
+//display_map에 배치된 색
 void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]);
-void lear_sta_map_area();
+//창에 있는 문자 지우는 함수
+void clear_sta_map_area();
+//피타고라스 (H, 샌드웜)
+void sand_mob(POSITION friend_h, POSITION enemy_h);
+//하베스터 좌표 찾는 함수
+bool find_h_positions(POSITION* friend_h, POSITION* enemy_h);
+//H 색 저장 배열
+int color_map[MAP_HEIGHT][MAP_WIDTH] = { 7 }; //7 : 기본 색
+//샌드웜 속도
+int turn_counter = 0;
+typedef struct {
+	int id;           // 고유 ID
+	POSITION pos;     // 현재 위치
+} Sandworm;
+
+Sandworm sandworms[2] = {
+	{.id = 1, .pos = {3, 8} },  // 첫 번째 샌드웜 (좌상단)
+	{.id = 2, .pos = {13, 50} }  // 두 번째 샌드웜 (우하단)
+};
 
 void display(
 	RESOURCE resource,
@@ -90,9 +112,21 @@ void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
 		for (int j = 0; j < MAP_WIDTH; j++) {
 			if (frontbuf[i][j] != backbuf[i][j]) {
 				POSITION pos = { i, j };
-				formation(i, j, backbuf); // 진형 배치
+				formation(i, j, backbuf); // 기본 색
 				gotoxy(padd(map_pos, pos));  // 위치 이동
 				printf("%c", backbuf[i][j]);  // 문자 출력
+
+				//샌드웜 좌표 확인 및 갱신
+				// 이거 아직 사용 X, 샌드웜 좌표먼저 받아오고 움직인다음에 갱신
+				if (backbuf[i][j] == 'W') { // 샌드웜 표시가 'W'라고 가정
+					for (int k = 0; k < 2; k++) {
+						if (sandworms[k].pos.row == i && sandworms[k].pos.column == j) {
+							sandworms[k].pos = pos;  // 위치 갱신
+						}
+					}
+				}
+
+
 			}
 			frontbuf[i][j] = backbuf[i][j];
 		}
@@ -138,6 +172,18 @@ void project_sys_map(char src[N_LAYER][SYS_HEIGHT][SYS_WIDTH], char dest[SYS_HEI
 void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]) {
 	// 시스템 메시지 출력 버퍼에 시스템 메시지 데이터를 복사
 	project_sys_map(system_map, sys_backbuf);
+
+	POSITION friend_h, enemy_h;
+	if (find_h_positions(&friend_h, &enemy_h))
+	{
+		gotoxy((POSITION) { sys_map_pos.row, sys_map_pos.column });
+		if (turn_counter % 50 == 0) {
+			sand_mob(friend_h, enemy_h); // 샌드웜 이동
+		}
+
+		// 턴 카운터 증가
+		turn_counter++;
+	}
 	for (int i = 0; i < SYS_HEIGHT; i++) {
 		for (int j = 0; j < SYS_WIDTH; j++) {
 			if (sys_frontbuf[i][j] != sys_backbuf[i][j]) {
@@ -178,7 +224,7 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 	}
 }
 
-//스페이스바 누르면 상태창에 내용 출력
+//스페이스바 누르면 상태창에 내용 출력, 명령창에 명령어 출력
 void display_info_in_sta_map(char ch, POSITION pos) {
 	//sta_map 창을 지워서 이전 출력 지움
 	clear_sta_map_area();
@@ -197,14 +243,36 @@ void display_info_in_sta_map(char ch, POSITION pos) {
 	}
 
 	gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column }); // sta_map 창 위치로 이동
-	printf("%s (좌표 : %d, %d)", info, pos.row, pos.column);
+	printf("%s (좌표 : %d, %d)\n", info, pos.row, pos.column);
+	if (strcmp(info, "스파이스") == 0)
+	{
+		gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column });
+		printf("스파이스가 자원이지");
+	}
+
+	if (strcmp(info, "하베스터") == 0) {
+		gotoxy((POSITION) { cmd_map_pos.row, cmd_map_pos.column });
+		printf(" H : 자원 수확");
+		gotoxy((POSITION) { cmd_map_pos.row + 1, cmd_map_pos.column });
+		printf(" M : 이동");
+
+	}
+
 }
 
 //상태창 내용을 지우는 함수
-void clear_sta_map_area() { 
-	for (int i = 0; i < STATUS_HEIGHT; i++) {
-		gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column });
+void clear_sta_map_area() {
+	for (int i = 0; i < STATUS_HEIGHT - 2; i++) {
+		gotoxy((POSITION) { sta_map_pos.row + i, sta_map_pos.column });
 		for (int j = 0; j < STATUS_WIDTH - 2; j++) {
+			printf(" ");
+		}
+	}
+
+	for (int i = 0; i < CMD_HEIGHT - 2; i++) {
+		gotoxy((POSITION) { cmd_map_pos.row + i, cmd_map_pos.column });
+		for (int j = 0; j < CMD_WIDTH - 2; j++)
+		{
 			printf(" ");
 		}
 	}
@@ -239,14 +307,24 @@ void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]) {
 }
 
 void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]) {
-	if (backbuf[i][j] == 'P') { set_color(BLACK); }
+	if (backbuf[i][j] == 'P') {
+		set_color(BLACK);
+	}
 	else if (backbuf[i][j] == 'B') {
-		if (i == 16 || i == 15) { set_color(BLUE); }
+		if (i == 16 || i == 15) {
+			set_color(BLUE);
+		}
 		else { set_color(DARK_RED); }
 	}
 	else if (backbuf[i][j] == 'H') {
-		if (i == 14) { set_color(BLUE); }
-		else { set_color(DARK_RED); }
+		if (i == 14) {
+			set_color(BLUE);
+			color_map[i][j] = BLUE;
+		}
+		else {
+			set_color(DARK_RED);
+			color_map[i][j] = DARK_RED;
+		}
 	}
 	else if (backbuf[i][j] == 'W') {
 		set_color(DARK_YELLOW);
@@ -259,5 +337,87 @@ void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]) {
 	}
 	else {
 		set_color(7);  // 기본 흰색
+	}
+}
+
+
+/*
+1. 하베스터 좌표 두개 가져옴
+	ex ) H(아군) : 좌표(14, 1)
+		 H(적군) : 좌표(3, 58)
+2. 샌드웜과 두 하베스터의 거리 계산
+3. 비교해서 더 가까운 하베스터 쪽으로 샌드웜 이동
+*/
+
+bool find_h_positions(POSITION* friend_h, POSITION* enemy_h) {
+	bool friend_found = false;
+	bool enemy_found = false;
+
+	for (int row = 0; row < MAP_HEIGHT; row++) {
+		for (int col = 0; col < MAP_WIDTH; col++) {
+			// 'H'가 있는지 확인하고 해당 좌표의 색상을 color_map에서 가져옴
+			if ((map[1][row][col] == 'H') && color_map[row][col] != 7) {
+				int color = color_map[row][col];
+
+				if (color == BLUE && !friend_found) {
+					friend_h->row = row;
+					friend_h->column = col;
+					friend_found = true;
+				}
+				else if (color == DARK_RED && !enemy_found) {
+					enemy_h->row = row;
+					enemy_h->column = col;
+					enemy_found = true;
+				}
+			}
+		}
+	}
+	return friend_found && enemy_found;  // 두 개의 H를 모두 찾은 경우에만 true 반환
+}
+
+int has_reached_target(Sandworm sandworm, POSITION target) {
+	return sandworm.pos.row == target.row && sandworm.pos.column == target.column;
+}
+
+void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
+	// 현재 위치 초기화 (화면에서 지우기)
+	map[1][sandworm->pos.row][sandworm->pos.column] = -1;
+
+	// 타겟까지의 가로/세로 거리 계산
+	int row_diff = target.row - sandworm->pos.row;
+	int col_diff = target.column - sandworm->pos.column;
+	// 이동 방향 결정
+	if (abs(row_diff) > abs(col_diff)) {
+		sandworm->pos.row += (row_diff > 0) ? 1 : -1;
+	}
+	else {
+		sandworm->pos.column += (col_diff > 0) ? 1 : -1;
+	}
+
+	// 새로운 위치 업데이트
+	map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
+}
+
+void sand_mob(POSITION friend_h, POSITION enemy_h) {
+	// 좌상단 샌드웜과 하베스터 간 거리 계산
+	double friend_sandworm0 = sqrt(pow(friend_h.row - sandworms[0].pos.row, 2) + pow(friend_h.column - sandworms[0].pos.column, 2));
+	double enemy_sandworm0 = sqrt(pow(enemy_h.row - sandworms[0].pos.row, 2) + pow(enemy_h.column - sandworms[0].pos.column, 2));
+
+	if (!has_reached_target(sandworms[0], friend_h) && friend_sandworm0 < enemy_sandworm0) {
+		move_sandworm_toward_target(&sandworms[0], friend_h);
+	}
+	else if (!has_reached_target(sandworms[0], enemy_h)) {
+		move_sandworm_toward_target(&sandworms[0], enemy_h);
+	}
+
+	// 우하단 샌드웜과 하베스터 간 거리 계산
+	double friend_sandworm1 = sqrt(pow(friend_h.row - sandworms[1].pos.row, 2) + pow(friend_h.column - sandworms[1].pos.column, 2));
+	double enemy_sandworm1 = sqrt(pow(enemy_h.row - sandworms[1].pos.row, 2) + pow(enemy_h.column - sandworms[1].pos.column, 2));
+
+	if (!has_reached_target(sandworms[1], friend_h) && friend_sandworm1 < enemy_sandworm1) {
+		move_sandworm_toward_target(&sandworms[1], friend_h);
+	}
+	else if (!has_reached_target(sandworms[1], enemy_h)) {
+		move_sandworm_toward_target(&sandworms[1], enemy_h);
 	}
 }

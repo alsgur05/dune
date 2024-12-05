@@ -20,6 +20,7 @@ extern const POSITION map_pos;
 extern char frontbuf[MAP_HEIGHT][MAP_WIDTH];
 extern char colorbuf[MAP_HEIGHT][MAP_WIDTH];
 
+
 /* ================= control =================== */
 int sys_clock = 0;		// system-wide clock(ms)
 CURSOR cursor = { { 1, 1 }, {1, 1} };
@@ -91,6 +92,7 @@ int main(void) {
 			}
 		}
 
+		
 		// 샘플 오브젝트 동작
 		sample_obj_move();
 
@@ -181,6 +183,7 @@ void sta_init(void) {
 		}
 	}
 }
+
 void cmd_init(void) {
 	for (int j = 0; j < CMD_WIDTH; j++) {
 		command_map[0][0][j] = '#';

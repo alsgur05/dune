@@ -7,6 +7,7 @@
 #include <conio.h>
 #include <assert.h>
 #include <time.h>
+#include <math.h>
 
 /* ================= system parameters =================== */
 #define TICK 10		// time unit(ms)
@@ -112,5 +113,8 @@ enum ColorType {
 } COLOR ;
 
 extern bool is_enemy_map[MAP_HEIGHT][MAP_WIDTH];
+extern char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH];
+extern int color_map[MAP_HEIGHT][MAP_WIDTH]; //H를 색으로 적군 아군 구별하기위해 만든 배열
 
+extern const POSITION sys_map_pos; //engine.c에도 사용할라고
 #endif

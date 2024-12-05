@@ -35,5 +35,6 @@ void display_info_in_sta_map(char ch, POSITION pos);
 int get_color_for_char(char ch, POSITION pos);
 void display_info_in_sta_map(char ch, POSITION pos);
 void clear_sta_map_area();
+void update_sandworms(POSITION friend_h, POSITION enemy_h);
 
 #endif
