@@ -19,7 +19,7 @@
 // 지금은 자원, 맵, 커서만 표시
 // 앞으로 화면에 표시할 내용들 여기에 추가하기
 void display(
-	RESOURCE resource,
+	RESOURCE* resource,
 	char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH],
 	CURSOR cursor,
 	char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH],
@@ -31,10 +31,11 @@ void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
 
-void display_info_in_sta_map(char ch, POSITION pos);
+void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource);
 int get_color_for_char(char ch, POSITION pos);
-void display_info_in_sta_map(char ch, POSITION pos);
 void clear_sta_map_area();
-void update_sandworms(POSITION friend_h, POSITION enemy_h);
+
+void add_system_message(const char* message);
+void display_system_messages(void);
 
 #endif

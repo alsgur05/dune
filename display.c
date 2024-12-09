@@ -4,7 +4,7 @@
 * 맵, 커서, 시스템 메시지, 정보창, 자원 상태 등등
 * io.c에 있는 함수들을 사용함
 */
-
+#include <stdlib.h>
 #include "display.h"
 #include "io.h"
 
@@ -17,7 +17,7 @@ const POSITION cmd_pos = { 20, 62 };
 //이 밑으로 출력 좌표
 const POSITION sta_map_pos = { 2, 63 };
 const POSITION cmd_map_pos = { 21,63 };
-const POSITION sys_map_pos = { 21, 1 };
+const POSITION sys_map_pos = { 20, 0 };
 //버퍼
 char backbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
 char frontbuf[MAP_HEIGHT][MAP_WIDTH] = { 0 };
@@ -40,14 +40,19 @@ void display_cursor(CURSOR cursor);
 void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]);
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
+
 //display_map에 배치된 색
 void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]);
+
 //창에 있는 문자 지우는 함수
 void clear_sta_map_area();
+
 //피타고라스 (H, 샌드웜)
 void sand_mob(POSITION friend_h, POSITION enemy_h);
+
 //하베스터 좌표 찾는 함수
 bool find_h_positions(POSITION* friend_h, POSITION* enemy_h);
+
 //H 색 저장 배열
 int color_map[MAP_HEIGHT][MAP_WIDTH] = { 7 }; //7 : 기본 색
 //샌드웜 속도
@@ -62,8 +67,9 @@ Sandworm sandworms[2] = {
 	{.id = 2, .pos = {13, 50} }  // 두 번째 샌드웜 (우하단)
 };
 
+
 void display(
-	RESOURCE resource,
+	const RESOURCE* resource,
 	char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH],
 	CURSOR cursor,
 	char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH],
@@ -71,7 +77,7 @@ void display(
 	char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]
 )
 {
-	display_resource(resource);
+	display_resource(*resource);
 	display_map(map);
 	display_cursor(cursor);
 	sys_map(system_map);
@@ -157,12 +163,23 @@ void display_cursor(CURSOR cursor) {
 
 
 void project_sys_map(char src[N_LAYER][SYS_HEIGHT][SYS_WIDTH], char dest[SYS_HEIGHT][SYS_WIDTH]) {
-	for (int k = 0; k < N_LAYER; k++) {
-		for (int i = 0; i < SYS_HEIGHT; i++) {
-			for (int j = 0; j < SYS_WIDTH; j++) {
-				if (src[k][i][j] >= 0) {
-					dest[i][j] = src[k][i][j];
-				}
+	// 먼저 모든 위치를 0으로 초기화
+	memset(dest, 0, sizeof(char) * SYS_HEIGHT * SYS_WIDTH);
+
+	// 레이어 0의 테두리('#') 먼저 복사
+	for (int i = 0; i < SYS_HEIGHT; i++) {
+		for (int j = 0; j < SYS_WIDTH; j++) {
+			if (src[0][i][j] == '#') {
+				dest[i][j] = '#';
+			}
+		}
+	}
+
+	// 그 다음 레이어 1의 내용을 복사 (테두리는 덮어쓰지 않음)
+	for (int i = 0; i < SYS_HEIGHT; i++) {
+		for (int j = 0; j < SYS_WIDTH; j++) {
+			if (dest[i][j] != '#' && src[1][i][j] >= 0) {
+				dest[i][j] = src[1][i][j];
 			}
 		}
 	}
@@ -176,26 +193,65 @@ void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]) {
 	POSITION friend_h, enemy_h;
 	if (find_h_positions(&friend_h, &enemy_h))
 	{
-		gotoxy((POSITION) { sys_map_pos.row, sys_map_pos.column });
 		if (turn_counter % 50 == 0) {
 			sand_mob(friend_h, enemy_h); // 샌드웜 이동
 		}
-
-		// 턴 카운터 증가
 		turn_counter++;
 	}
+
+	display_system_messages();
+
+	// 버퍼 업데이트
 	for (int i = 0; i < SYS_HEIGHT; i++) {
 		for (int j = 0; j < SYS_WIDTH; j++) {
-			if (sys_frontbuf[i][j] != sys_backbuf[i][j]) {
-				// 시스템 화면의 실제 위치 계산
-				POSITION screen_pos = { sys_pos.row + i, sys_pos.column + j };
-				gotoxy(screen_pos);  // 화면에서 sys_pos를 기준으로 이동
-				printc(screen_pos, sys_backbuf[i][j], COLOR_DEFAULT);
+			// # 문자는 덮어쓰지 않음
+			if (sys_backbuf[i][j] != ' ') {
+				sys_frontbuf[i][j] = sys_backbuf[i][j];
 			}
-			sys_frontbuf[i][j] = sys_backbuf[i][j];
 		}
 	}
 }
+
+MessageQueue messageQueue = { .count = 0 };
+
+void add_system_message(const char* message) {
+	// 메시지가 가득 찼을 경우 모든 메시지를 한 칸씩 위로 이동
+	if (messageQueue.count >= MAX_MESSAGES) {
+		for (int i = 0; i < MAX_MESSAGES - 1; i++) {
+			strcpy_s(messageQueue.messages[i], MAX_MESSAGE_LENGTH, messageQueue.messages[i + 1]);
+		}
+		messageQueue.count--;
+	}
+
+	// 새 메시지 추가
+	strcpy_s(messageQueue.messages[messageQueue.count], MAX_MESSAGE_LENGTH, message);
+	messageQueue.count++;
+
+	// 메시지 출력
+	display_system_messages();
+}
+
+void display_system_messages() {
+	// 시스템 메시지 영역 초기화 (테두리는 유지)
+	for (int i = 0; i < SYS_HEIGHT; i++) {  // 물음표가 출력된 실제 높이
+		gotoxy((POSITION) { sys_map_pos.row + i, sys_map_pos.column });
+		for (int j = 0; j < SYS_WIDTH; j++) {  // 물음표가 출력된 실제 너비
+			if (i == 0 || i == SYS_HEIGHT - 1 || j == 0 || j == SYS_WIDTH - 1) {  // 테두리 위치
+				printf("#");
+			}
+			else {
+				printf(" ");
+			}
+		}
+	}
+
+	// 저장된 메시지들을 순서대로 출력
+	for (int i = 0; i < messageQueue.count; i++) {
+		gotoxy((POSITION) { sys_map_pos.row + i + 1, sys_map_pos.column + 1 });  // 테두리 안쪽부터 시작
+		printf("%s", messageQueue.messages[i]);
+	}
+}
+
 
 void project_status_map(char src[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH], char dest[STATUS_HEIGHT][STATUS_WIDTH]) {
 	for (int k = 0; k < N_LAYER; k++) {
@@ -224,8 +280,43 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 	}
 }
 
+
+char get_key_non_blocking() {
+	if (_kbhit()) {  // 키가 눌렸는지 확인
+		char input = _getch();
+
+		// 방향키 처리를 위한 분기
+		if (input == 72 || input == 75 || input == 77 || input == 80) {
+			input = _getch(); 
+			return 0;  // 방향키는 처리하지 않음
+		}
+
+		return input;  // 최종적으로 입력된 키를 반환
+	}
+	return 0;  // 아무 키도 눌리지 않았을 경우
+}
+
+
+//명령어 출력 함수
+void sys_text(const char* message) {
+	add_system_message(message);
+}
+
+// 하베스터 이동 함수 (임의 구현)
+void move_harvester(POSITION pos) {
+	// 하베스터 이동 처리 (구체적인 동작을 추가해야 함)
+	sys_text("하베스터 이동 중...\n");
+}
+
+// 자원 수확 함수 (임의 구현)
+void harvest_resources(POSITION pos) {
+	// 자원 수확 처리 (구체적인 동작을 추가해야 함)
+	sys_text("자원 수확 중...\n");
+	// 자원 수확 로직 구현
+}
+
 //스페이스바 누르면 상태창에 내용 출력, 명령창에 명령어 출력
-void display_info_in_sta_map(char ch, POSITION pos) {
+void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource) {
 	//sta_map 창을 지워서 이전 출력 지움
 	clear_sta_map_area();
 	// sta_map 창에 커서가 위치한 배치의 정보 출력
@@ -247,7 +338,39 @@ void display_info_in_sta_map(char ch, POSITION pos) {
 	if (strcmp(info, "스파이스") == 0)
 	{
 		gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column });
-		printf("스파이스가 자원이지");
+		printf("스파이스가 자원이지\n");
+	}
+
+	if (strcmp(info, "아군 진형") == 0) {
+		gotoxy((POSITION) { cmd_map_pos.row, cmd_map_pos.column });
+		printf(" H : 하베스터 생산\n");
+
+		char input;
+		while (1) {
+			input = get_key_non_blocking();
+			if (input == 27) {
+				clear_sta_map_area();
+				return;
+			}
+			if (input == 'H' || input == 'h') {
+				if (resource->spice < 5) {
+					sys_text("스파이스가 부족합니다.");
+					printf("스파이스가 부족합니다( spice : %d )\n", resource->spice);
+					break;
+				}
+				else {
+					sys_text("하베스터를 생성하고 있습니다.");
+					resource->spice -= 5;
+					for (int i = 10; i > 1; i--)
+					{
+						printf("하베스터 생성까지 남은 시간 : %d", i);
+					}
+					printf("하베스터가 생성되었습니다 ( spice : %d -> %d )\n", resource->spice + 5, resource->spice); 
+					break;
+				}
+			}
+		}
+
 	}
 
 	if (strcmp(info, "하베스터") == 0) {
@@ -256,6 +379,27 @@ void display_info_in_sta_map(char ch, POSITION pos) {
 		gotoxy((POSITION) { cmd_map_pos.row + 1, cmd_map_pos.column });
 		printf(" M : 이동");
 
+		char input;
+		while (1) {
+			input = get_key_non_blocking();  // 비동기적으로 키 입력 받기
+
+			if (input == 27) {
+				clear_sta_map_area();
+				return;
+			}
+
+			if (input == 'M' || input == 'm') {
+				move_harvester(pos);
+				break;
+			}
+			else if (input == 'H' || input == 'h') {
+				harvest_resources(pos);
+				break;
+			}
+			else if (input == 0) {
+				continue;
+			}
+		}
 	}
 
 }
@@ -340,14 +484,6 @@ void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]) {
 	}
 }
 
-
-/*
-1. 하베스터 좌표 두개 가져옴
-	ex ) H(아군) : 좌표(14, 1)
-		 H(적군) : 좌표(3, 58)
-2. 샌드웜과 두 하베스터의 거리 계산
-3. 비교해서 더 가까운 하베스터 쪽으로 샌드웜 이동
-*/
 
 bool find_h_positions(POSITION* friend_h, POSITION* enemy_h) {
 	bool friend_found = false;

@@ -31,7 +31,23 @@ char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH] = { 0 };
 char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH] = { 0 };
 char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
 char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH] = { 0 };
-bool is_enemy_map[MAP_HEIGHT][MAP_WIDTH] = { {false} }; 
+bool is_enemy_map[MAP_HEIGHT][MAP_WIDTH] = { {false} };
+
+//RESOURCE resource = {
+//	.spice = 0,
+//	.spice_max = 100,
+//	.population = 0,
+//	.population_max = 10
+//};
+
+OBJECT_SAMPLE obj = {
+	.pos = {1, 1},
+	.dest = {MAP_HEIGHT - 2, MAP_WIDTH - 2},
+	//.repr = 'o',
+	.speed = 300,
+	.next_move_time = 300
+};
+
 
 RESOURCE resource = {
 	.spice = 0,
@@ -40,13 +56,6 @@ RESOURCE resource = {
 	.population_max = 0
 };
 
-OBJECT_SAMPLE obj = {
-	.pos = {1, 1},
-	.dest = {MAP_HEIGHT - 2, MAP_WIDTH - 2},
-	.repr = 'o',
-	.speed = 300,
-	.next_move_time = 300
-};
 
 /* ================= main() =================== */
 int main(void) {
@@ -58,7 +67,7 @@ int main(void) {
 	cmd_init();
 	intro();
 	init_map();
-	display(resource, map, cursor, system_map, status_map, command_map);
+	display(&resource, map, cursor, system_map, status_map, command_map);
 
 
 	while (1) {
@@ -77,7 +86,7 @@ int main(void) {
 		else if (key == k_space) {
 			// 스페이스바가 눌렸을 때, 현재 위치의 정보를 sta_map에 표시
 			char ch = frontbuf[cursor.current.row][cursor.current.column];
-			display_info_in_sta_map(ch, cursor.current);
+			display_info_in_sta_map(ch, cursor.current, &resource);
 		}
 		else if (key == k_esc) {
 			clear_sta_map_area();
@@ -92,12 +101,12 @@ int main(void) {
 			}
 		}
 
-		
+
 		// 샘플 오브젝트 동작
 		sample_obj_move();
 
 		// 화면 출력
-		display(resource, map, cursor, system_map, status_map, command_map);
+		display(&resource, map, cursor, system_map, status_map, command_map);
 		Sleep(TICK);
 		sys_clock += 10;
 	}
@@ -141,27 +150,29 @@ void init(void) {
 	// object sample
 	map[1][obj.pos.row][obj.pos.column] = 'o';
 }
-void sys_init(void) {
-	for (int j = 0; j < SYS_WIDTH; j++) {
-		system_map[0][0][j] = '#';
-		system_map[0][SYS_HEIGHT - 1][j] = '#';
-	}
 
-	for (int i = 1; i < SYS_HEIGHT - 1; i++) {
-		system_map[0][i][0] = '#';
-		system_map[0][i][SYS_WIDTH - 1] = '#';
-		for (int j = 1; j < SYS_WIDTH - 1; j++) {
-			system_map[0][i][j] = ' ';
+void sys_init(void) {
+	// 물음표 영역에 맞춘 테두리 생성
+	for (int i = 0; i < SYS_HEIGHT - 1; i++) {  // 물음표가 채워진 영역만큼
+		for (int j = 0; j < SYS_WIDTH - 1; j++) {
+			if (i == 0 || i == SYS_HEIGHT - 2 ||    // 상단과 하단 테두리
+				j == 0 || j == SYS_WIDTH - 2) {     // 좌측과 우측 테두리
+				system_map[0][i][j] = '#';
+			}
+			else {
+				system_map[0][i][j] = ' ';
+			}
 		}
 	}
 
-	// layer 1(map[1])은 비워 두기(-1로 채움)
+	// layer 1 초기화
 	for (int i = 0; i < SYS_HEIGHT; i++) {
 		for (int j = 0; j < SYS_WIDTH; j++) {
 			system_map[1][i][j] = -1;
 		}
 	}
 }
+
 void sta_init(void) {
 	for (int j = 0; j < STATUS_WIDTH; j++) {
 		status_map[0][0][j] = '#';
@@ -319,17 +330,16 @@ POSITION sample_obj_next_position(void) {
 	}
 }
 
-void sample_obj_move(void) {
+void sample_obj_move(void) { //여기 이상하면 스켈레톤 다시봐
 	if (sys_clock <= obj.next_move_time) {
-		// 아직 시간이 안 됐음
-		return;
+		return;  // 아직 시간이 안 됐음
 	}
-
-	// 오브젝트(건물, 유닛 등)은 layer1(map[1])에 저장
 	map[1][obj.pos.row][obj.pos.column] = -1;
-	obj.pos = sample_obj_next_position();
-	map[1][obj.pos.row][obj.pos.column] = obj.repr;
 
+	POSITION next_pos = sample_obj_next_position();
+	obj.pos = next_pos;
+
+	map[1][obj.pos.row][obj.pos.column] = obj.repr;
 	obj.next_move_time = sys_clock + obj.speed;
 }
 
@@ -358,7 +368,7 @@ void init_map(void) {
 	map[0][16][2] = 'B';
 	map[0][15][1] = 'B';
 	map[0][15][2] = 'B';
-	
+
 	//우상단 본진
 	map[1][1][58] = 'B';
 	map[1][2][58] = 'B';
@@ -381,7 +391,7 @@ void init_map(void) {
 	map[1][14][1] = 'H';
 	//우상단 하베스터
 	map[1][3][58] = 'H';
-	
+
 	//좌하단 스파이스
 	map[0][12][1] = 'S';
 	//우상단 스파이스
@@ -406,8 +416,8 @@ void init_map(void) {
 	//바위 (1x1)
 	map[0][14][32] = 'R';
 	map[0][6][15] = 'R';
-	map[0][3][23]= 'R';
-	map[0][15][48]= 'R';
+	map[0][3][23] = 'R';
+	map[0][15][48] = 'R';
 
 	//샌드웜
 	map[1][3][8] = 'W';

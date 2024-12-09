@@ -1,6 +1,9 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
+#define MAX_MESSAGES 6  // 최대 저장할 메시지 수
+#define MAX_MESSAGE_LENGTH 100  // 각 메시지의 최대 길이
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <Windows.h>
@@ -36,6 +39,8 @@ typedef struct {
 	POSITION previous;  // 직전 위치
 	POSITION current;   // 현재 위치
 } CURSOR;
+
+extern CURSOR cursor;
 
 // 입력 가능한 키 종류.
 // 수업에서 enum은 생략했는데, 크게 어렵지 않으니 예제 검색
@@ -117,4 +122,14 @@ extern char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH];
 extern int color_map[MAP_HEIGHT][MAP_WIDTH]; //H를 색으로 적군 아군 구별하기위해 만든 배열
 
 extern const POSITION sys_map_pos; //engine.c에도 사용할라고
+
+typedef struct {
+	char sys_backbuf[SYS_HEIGHT][SYS_WIDTH];  // 시스템 창 텍스트를 저장하는 버퍼
+} SysMap;
+
+typedef struct {
+	char messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
+	int count;  // 현재 저장된 메시지 수
+} MessageQueue;
+
 #endif
