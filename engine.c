@@ -20,7 +20,6 @@ extern const POSITION map_pos;
 extern char frontbuf[MAP_HEIGHT][MAP_WIDTH];
 extern char colorbuf[MAP_HEIGHT][MAP_WIDTH];
 
-
 /* ================= control =================== */
 int sys_clock = 0;		// system-wide clock(ms)
 CURSOR cursor = { { 1, 1 }, {1, 1} };
@@ -33,13 +32,6 @@ char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH] = { 0 };
 char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH] = { 0 };
 bool is_enemy_map[MAP_HEIGHT][MAP_WIDTH] = { {false} };
 
-//RESOURCE resource = {
-//	.spice = 0,
-//	.spice_max = 100,
-//	.population = 0,
-//	.population_max = 10
-//};
-
 OBJECT_SAMPLE obj = {
 	.pos = {1, 1},
 	.dest = {MAP_HEIGHT - 2, MAP_WIDTH - 2},
@@ -50,7 +42,7 @@ OBJECT_SAMPLE obj = {
 
 
 RESOURCE resource = {
-	.spice = 0,
+	.spice = 10,
 	.spice_max = 0,
 	.population = 0,
 	.population_max = 0
@@ -217,29 +209,40 @@ void cmd_init(void) {
 	}
 }
 
+//와 여기네 시발
 int get_color_for_char(char ch, POSITION pos) {
-	int color = COLOR_DEFAULT;
+	if (ch == 'H') {
+		// color_map의 색상이 설정되어 있으면 그 색상 사용
+		if (color_map[pos.row][pos.column] == BLUE ||
+			color_map[pos.row][pos.column] == DARK_RED) {
+			return color_map[pos.row][pos.column];
+		}
+		// 생성 중인 하베스터
+		else if (color_map[pos.row][pos.column] == GRAY) {
+			return GRAY;
+		}
+		// color_map에 색상이 설정되지 않은 경우 기본 색상
+		return COLOR_DEFAULT;
+	}
 
+	// 다른 오브젝트들의 색상 처리
 	if (ch == 'P') {
-		color = BLACK;
+		return BLACK;
 	}
 	else if (ch == 'B') {
-		color = (pos.row == 16 || pos.row == 15) ? BLUE : DARK_RED;
+		return (pos.row == 16 || pos.row == 15) ? BLUE : DARK_RED;
 	}
 	else if (ch == 'R') {
-		color = GRAY;
+		return GRAY;
 	}
 	else if (ch == 'S') {
-		color = RED;
+		return RED;
 	}
 	else if (ch == 'W') {
-		color = DARK_YELLOW;
-	}
-	else if (ch == 'H') {
-		color = (pos.row == 14) ? BLUE : DARK_RED;
+		return DARK_YELLOW;
 	}
 
-	return color;
+	return COLOR_DEFAULT;
 }
 
 // (가능하다면) 지정한 방향으로 커서 이동
@@ -389,8 +392,11 @@ void init_map(void) {
 
 	//좌하단 하베스터
 	map[1][14][1] = 'H';
+	color_map[14][1] = BLUE;
 	//우상단 하베스터
 	map[1][3][58] = 'H';
+	color_map[3][58] = RED;
+
 
 	//좌하단 스파이스
 	map[0][12][1] = 'S';
@@ -422,4 +428,9 @@ void init_map(void) {
 	//샌드웜
 	map[1][3][8] = 'W';
 	map[1][13][50] = 'W';
+
+	//샌드웜 막는 돌 테스트
+	map[0][4][8] = 'R';
+	map[0][3][7] = 'R';
+	map[0][3][9] = 'R';
 }

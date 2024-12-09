@@ -16,6 +16,8 @@
 #define COLOR_RESOURCE  112
 #define COLOR_BLUE 1
 
+extern bool is_showing_harvester_production;
+
 // 지금은 자원, 맵, 커서만 표시
 // 앞으로 화면에 표시할 내용들 여기에 추가하기
 void display(
@@ -32,10 +34,11 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
 
 void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource);
-int get_color_for_char(char ch, POSITION pos);
 void clear_sta_map_area();
 
 void add_system_message(const char* message);
 void display_system_messages(void);
-
+void sys_text(const char* message);
+HarvesterList find_harvesters();
+void initialize_harvester_colors();
 #endif

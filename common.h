@@ -4,6 +4,18 @@
 #define MAX_MESSAGES 6  // 최대 저장할 메시지 수
 #define MAX_MESSAGE_LENGTH 100  // 각 메시지의 최대 길이
 
+#define MAX_HARVESTERS 50 //아군, 적군 하베스터 총 합
+
+#define FRIEND_BASE_START_ROW 15
+#define FRIEND_BASE_END_ROW 16
+#define FRIEND_BASE_START_COL 1
+#define FRIEND_BASE_END_COL 2
+
+#define ENEMY_BASE_START_ROW 1
+#define ENEMY_BASE_END_ROW 2
+#define ENEMY_BASE_START_COL 55
+#define ENEMY_BASE_END_COL 56
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <Windows.h>
@@ -11,6 +23,7 @@
 #include <assert.h>
 #include <time.h>
 #include <math.h>
+#include <string.h>
 
 /* ================= system parameters =================== */
 #define TICK 10		// time unit(ms)
@@ -131,5 +144,13 @@ typedef struct {
 	char messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 	int count;  // 현재 저장된 메시지 수
 } MessageQueue;
+
+typedef struct {
+	POSITION friend_harvesters[MAX_HARVESTERS];
+	POSITION enemy_harvesters[MAX_HARVESTERS];
+	int friend_count;
+	int enemy_count;
+} HarvesterList;
+
 
 #endif

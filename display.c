@@ -42,13 +42,13 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]);
 void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]);
 
 //display_map에 배치된 색
-void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]);
+void formation(int i, int j, const char* info);
 
 //창에 있는 문자 지우는 함수
 void clear_sta_map_area();
 
 //피타고라스 (H, 샌드웜)
-void sand_mob(POSITION friend_h, POSITION enemy_h);
+void sand_mob();
 
 //하베스터 좌표 찾는 함수
 bool find_h_positions(POSITION* friend_h, POSITION* enemy_h);
@@ -60,13 +60,27 @@ int turn_counter = 0;
 typedef struct {
 	int id;           // 고유 ID
 	POSITION pos;     // 현재 위치
+	POSITION prev_pos; // 이전 위치를 저장
 } Sandworm;
 
 Sandworm sandworms[2] = {
-	{.id = 1, .pos = {3, 8} },  // 첫 번째 샌드웜 (좌상단)
-	{.id = 2, .pos = {13, 50} }  // 두 번째 샌드웜 (우하단)
+	{ // 좌상단 샌드웜
+		.id = 1,
+		.pos = {3, 8},
+		.prev_pos = {3, 8}
+	},
+	{ // 우하단 샌드웜
+		.id = 2,
+		.pos = {13, 50},
+		.prev_pos = {13, 50}
+	}
 };
 
+bool is_producing_harvester = false;
+int harvester_production_time = 0;
+POSITION production_pos = { 0, 0 };
+
+bool is_showing_harvester_production;
 
 void display(
 	const RESOURCE* resource,
@@ -111,28 +125,119 @@ void project(char src[N_LAYER][MAP_HEIGHT][MAP_WIDTH], char dest[MAP_HEIGHT][MAP
 	}
 }
 
+void formation(int i, int j, const char* info) {
+	if (strcmp(info, "장판") == 0) {
+		set_color(BLACK);
+		color_map[i][j] = BLACK;
+	}
+	else if (strcmp(info, "아군 진형") == 0) {
+		set_color(BLUE);
+		color_map[i][j] = BLUE;
+	}
+	else if (strcmp(info, "적 진형") == 0) {
+		set_color(DARK_RED);
+		color_map[i][j] = DARK_RED;
+	}
+	else if (strcmp(info, "아군 하베스터") == 0) {
+		set_color(BLUE);
+		color_map[i][j] = BLUE;
+	}
+	else if (strcmp(info, "적군 하베스터") == 0) {
+		set_color(DARK_RED);
+		color_map[i][j] = DARK_RED;
+	}
+	else if (strcmp(info, "생성중인 하베스터") == 0) {
+		set_color(GRAY);
+		color_map[i][j] = GRAY;
+	}
+	else if (strcmp(info, "스파이스") == 0) {
+		set_color(RED);
+		color_map[i][j] = RED;
+	}
+	else if (strcmp(info, "샌드웜") == 0) {
+		set_color(DARK_YELLOW);
+		color_map[i][j] = DARK_YELLOW;
+	}
+	else if (strcmp(info, "바위") == 0) {
+		set_color(GRAY);
+		color_map[i][j] = GRAY;
+	}
+	else {
+		set_color(7); // 기본 흰색
+		color_map[i][j] = 7;
+	}
+}
+
 void display_map(char map[N_LAYER][MAP_HEIGHT][MAP_WIDTH]) {
+	static bool is_first_call = true;
+
+	// 최초 실행시에만 하베스터 색상 초기화
+	if (is_first_call) {
+		initialize_harvester_colors();
+		is_first_call = false;
+	}
+
 	project(map, backbuf);
+
+	// 하베스터 생산 중일 때 깜빡임 효과
+	if (is_producing_harvester) {
+		backbuf[production_pos.row][production_pos.column] = 'H';
+		// 커서 위치와 무관하게 깜빡임
+		if (turn_counter % 50 < 25) {
+			set_color(COLOR_DEFAULT);
+			gotoxy(padd(map_pos, production_pos));
+			printf("H");
+		}
+		else {
+			set_color(GRAY);
+			gotoxy(padd(map_pos, production_pos));
+			printf("H");
+		}
+	}
 
 	for (int i = 0; i < MAP_HEIGHT; i++) {
 		for (int j = 0; j < MAP_WIDTH; j++) {
-			if (frontbuf[i][j] != backbuf[i][j]) {
-				POSITION pos = { i, j };
-				formation(i, j, backbuf); // 기본 색
-				gotoxy(padd(map_pos, pos));  // 위치 이동
-				printf("%c", backbuf[i][j]);  // 문자 출력
-
-				//샌드웜 좌표 확인 및 갱신
-				// 이거 아직 사용 X, 샌드웜 좌표먼저 받아오고 움직인다음에 갱신
-				if (backbuf[i][j] == 'W') { // 샌드웜 표시가 'W'라고 가정
-					for (int k = 0; k < 2; k++) {
-						if (sandworms[k].pos.row == i && sandworms[k].pos.column == j) {
-							sandworms[k].pos = pos;  // 위치 갱신
-						}
+			if (frontbuf[i][j] != backbuf[i][j] && !(is_producing_harvester && i == production_pos.row && j == production_pos.column)) {
+				const char* info = "사막 지형";  // 기본값 설정
+				switch (backbuf[i][j]) {
+				case 'P':
+					info = "장판";
+					break;
+				case 'B':
+					info = (i == 16 || i == 15) ? "아군 진형" : "적 진형";
+					break;
+				case 'H':
+					if (color_map[i][j] == BLUE) {
+						info = "아군 하베스터";
 					}
+					else if (color_map[i][j] == DARK_RED) {
+						info = "적군 하베스터";
+					}
+					else if (color_map[i][j] == GRAY) {
+						info = "생성중인 하베스터";
+					}
+					break;
+				case 'W':
+					info = "샌드웜";
+					break;
+				case 'R':
+					info = "바위";
+					break;
+				case 'S':
+					info = "스파이스";
+					break;
 				}
 
+				formation(i, j, info);
+				POSITION pos = { i, j };
+				gotoxy(padd(map_pos, pos));
 
+				// 생산 중인 하베스터의 경우 color_map의 색상 사용
+				if (is_producing_harvester && i == production_pos.row && j == production_pos.column) {
+					set_color(color_map[i][j]);
+				}
+
+				printf("%c", backbuf[i][j]);
 			}
 			frontbuf[i][j] = backbuf[i][j];
 		}
@@ -149,7 +254,7 @@ void display_cursor(CURSOR cursor) {
 	char ch = frontbuf[prev.row][prev.column];
 	int color = get_color_for_char(ch, prev);
 
-	set_color(color);  // 이전 위치 색상 설정
+	set_color(color);  // 이전위치 색상 설정
 	printc(padd(map_pos, prev), ch, color);
 
 	// 현재 커서 위치의 문자를 커서 색상으로 출력
@@ -161,6 +266,40 @@ void display_cursor(CURSOR cursor) {
 	set_color(COLOR_DEFAULT);
 }
 
+
+void initialize_harvester_colors() {
+	// 아군 하베스터 초기 위치 (i = 14, 15, 16)
+	POSITION friend_harvester_positions[] = {
+		{14, 2},
+		{15, 3},
+		{16, 3}
+	};
+
+	// 아군 하베스터 색상 설정
+	for (int i = 0; i < sizeof(friend_harvester_positions) / sizeof(POSITION); i++) {
+		POSITION pos = friend_harvester_positions[i];
+		if (map[1][pos.row][pos.column] == 'H') {
+			color_map[pos.row][pos.column] = BLUE;
+		}
+	}
+}
+// 하베스터 이동 시 색상을 유지하는 함수
+void move_harvester_with_color(POSITION from, POSITION to) {
+	if (map[1][from.row][from.column] == 'H') {
+		// 이동할 때 색상도 함께 이동
+		int color = color_map[from.row][from.column];
+		map[1][from.row][from.column] = -1;  // 이전 위치 비우기
+		color_map[from.row][from.column] = 7; // 이전 위치 색상 초기화
+
+		map[1][to.row][to.column] = 'H';     // 새 위치에 하베스터 배치
+		color_map[to.row][to.column] = color; // 새 위치에 색상 설정
+	}
+}
+// 새로운 하베스터 생성 시 색상 설정 함수
+void create_new_harvester(POSITION pos, bool is_friend) {
+	map[1][pos.row][pos.column] = 'H';
+	color_map[pos.row][pos.column] = is_friend ? BLUE : DARK_RED;
+}
 
 void project_sys_map(char src[N_LAYER][SYS_HEIGHT][SYS_WIDTH], char dest[SYS_HEIGHT][SYS_WIDTH]) {
 	// 먼저 모든 위치를 0으로 초기화
@@ -185,31 +324,36 @@ void project_sys_map(char src[N_LAYER][SYS_HEIGHT][SYS_WIDTH], char dest[SYS_HEI
 	}
 }
 
-
 void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]) {
-	// 시스템 메시지 출력 버퍼에 시스템 메시지 데이터를 복사
 	project_sys_map(system_map, sys_backbuf);
 
+	turn_counter++;
+
+	if (is_producing_harvester && turn_counter >= harvester_production_time) {
+		// 생산 완료
+		is_producing_harvester = false;
+		map[1][production_pos.row][production_pos.column] = 'H';
+
+		// 즉시 아군 색상 설정
+		color_map[production_pos.row][production_pos.column] = BLUE;
+
+		// 색상이 즉시 반영되도록 frontbuf와 backbuf 모두 업데이트
+		POSITION pos = production_pos;
+		gotoxy(padd(map_pos, pos));
+		set_color(BLUE);
+		printf("%c", 'H');
+
+		sys_text("하베스터가 생성되었습니다.");
+	}
+	// 하베스터 위치 찾기를 하베스터 생성 이후로 이동
 	POSITION friend_h, enemy_h;
-	if (find_h_positions(&friend_h, &enemy_h))
-	{
-		if (turn_counter % 50 == 0) {
+	if (find_h_positions(&friend_h, &enemy_h)) {
+		if (turn_counter % 10 == 0) {
 			sand_mob(friend_h, enemy_h); // 샌드웜 이동
 		}
-		turn_counter++;
 	}
 
 	display_system_messages();
-
-	// 버퍼 업데이트
-	for (int i = 0; i < SYS_HEIGHT; i++) {
-		for (int j = 0; j < SYS_WIDTH; j++) {
-			// # 문자는 덮어쓰지 않음
-			if (sys_backbuf[i][j] != ' ') {
-				sys_frontbuf[i][j] = sys_backbuf[i][j];
-			}
-		}
-	}
 }
 
 MessageQueue messageQueue = { .count = 0 };
@@ -267,10 +411,30 @@ void project_status_map(char src[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH], char des
 
 void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 	project_status_map(status_map, status_backbuf);
+
+	// 하베스터 생산 정보를 표시하기로 했다면 계속 업데이트
+	if (is_showing_harvester_production && is_producing_harvester) {
+		static int last_shown_seconds = -1;  // 마지막으로 표시한 시간
+
+		// 남은 시간 계산
+		int remaining_ticks = harvester_production_time - turn_counter;
+		int remaining_seconds = remaining_ticks / 50;
+
+		// 초가 변경됐을 때만 업데이트
+		if (remaining_seconds != last_shown_seconds) {
+			gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column });
+			printf("생성중인 하베스터");
+			gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column });
+			printf("생성까지 남은 시간: %d초    ", remaining_seconds);  // 공백 추가로 이전 숫자 지우기
+
+			last_shown_seconds = remaining_seconds;
+		}
+	}
+
+	// 나머지 상태창 업데이트 (기존 버퍼 업데이트 코드)
 	for (int i = 0; i < STATUS_HEIGHT; i++) {
 		for (int j = 0; j < STATUS_WIDTH; j++) {
 			if (status_frontbuf[i][j] != status_backbuf[i][j]) {
-				// 시스템 화면의 실제 위치 계산
 				POSITION screen_pos = { status_pos.row + i, status_pos.column + j };
 				gotoxy(screen_pos);
 				printc(screen_pos, status_backbuf[i][j], COLOR_DEFAULT);
@@ -287,7 +451,7 @@ char get_key_non_blocking() {
 
 		// 방향키 처리를 위한 분기
 		if (input == 72 || input == 75 || input == 77 || input == 80) {
-			input = _getch(); 
+			input = _getch();
 			return 0;  // 방향키는 처리하지 않음
 		}
 
@@ -315,29 +479,108 @@ void harvest_resources(POSITION pos) {
 	// 자원 수확 로직 구현
 }
 
+// 아군 본진 주변의 빈 공간을 찾는 함수
+bool find_empty_space_near_base(POSITION* pos) {
+	// 아군 본진 위치 (15-16, 1-2)
+	POSITION possible_spots[] = {
+		{14, 2},
+		{15, 3},
+		{16, 3},
+		{14, 1}
+	};
+	int num_spots = 4;  // 배치 가능한 위치 개수 수정
+
+	// 가능한 위치들을 무작위로 섞기
+	for (int i = num_spots - 1; i > 0; i--) {
+		int j = rand() % (i + 1);
+		POSITION temp = possible_spots[i];
+		possible_spots[i] = possible_spots[j];
+		possible_spots[j] = temp;
+	}
+
+	// 빈 공간 찾기
+	for (int i = 0; i < num_spots; i++) {
+		if (map[1][possible_spots[i].row][possible_spots[i].column] == -1) {
+			*pos = possible_spots[i];
+			return true;
+		}
+	}
+	return false;
+}
+
+
 //스페이스바 누르면 상태창에 내용 출력, 명령창에 명령어 출력
 void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource) {
 	//sta_map 창을 지워서 이전 출력 지움
 	clear_sta_map_area();
 	// sta_map 창에 커서가 위치한 배치의 정보 출력
-	const char* info;
+	const char* info = "아군 하베스터";
 	switch (ch) {
 	case 'P': info = "장판"; break;
-	case 'B':
-		info = is_enemy_map[pos.row][pos.column] ? "적 진형" : "아군 진형";
-		break;
+	case 'B': info = is_enemy_map[pos.row][pos.column] ? "적 진형" : "아군 진형"; break;
 	case 'R': info = "바위"; break; //나중에 2x2는 바위, 1x1은 돌맹이
 	case 'S': info = "스파이스"; break;
 	case 'W': info = "샌드웜"; break;
-	case 'H': info = "하베스터"; break;
+	case 'H':
+		// 생성 중인 하베스터 처리를 먼저
+		// 생성 중인 하베스터 처리
+		if (ch == 'H' && is_producing_harvester &&
+			pos.row == production_pos.row &&
+			pos.column == production_pos.column) {
+
+			is_showing_harvester_production = true;
+
+			// 남은 시간 표시
+			gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column });
+			printf("생성중인 하베스터");
+
+			char input = get_key_non_blocking();
+			if (input == 'x' || input == 'X') {
+				gotoxy((POSITION) { cmd_map_pos.row, cmd_map_pos.column });
+				printf(" X : 생산 취소");
+
+				// 실제 취소 입력 대기
+				while (1) {
+					input = get_key_non_blocking();
+					display_system_messages();
+
+					if (input == 'X' || input == 'x') {
+						is_producing_harvester = false;
+						map[1][production_pos.row][production_pos.column] = -1;
+						resource->spice += 3;
+						sys_text("하베스터 생산이 취소되었습니다.");
+						clear_sta_map_area();
+						is_showing_harvester_production = false;
+						return;
+					}
+					else if (input == 27) {  // ESC
+						clear_sta_map_area();
+						return;
+					}
+					else if (input == 0) {
+						Sleep(10);
+						continue;
+					}
+				}
+			}
+			return;
+		}
+		// 일반 하베스터 처리
+		else if (color_map[pos.row][pos.column] == BLUE) {
+			info = "아군 하베스터";
+		}
+		else if (color_map[pos.row][pos.column] == DARK_RED) {
+			info = "적군 하베스터";
+		}
+		break;
 	default: info = "사막 지형"; break;
 	}
 
 	gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column }); // sta_map 창 위치로 이동
-	printf("%s (좌표 : %d, %d)\n", info, pos.row, pos.column);
+	printf("%s\n", info);
 	if (strcmp(info, "스파이스") == 0)
 	{
-		gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column });
+		gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column }); //이거 나중에 sys_text 처럼 바꾸자
 		printf("스파이스가 자원이지\n");
 	}
 
@@ -355,17 +598,21 @@ void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource) {
 			if (input == 'H' || input == 'h') {
 				if (resource->spice < 5) {
 					sys_text("스파이스가 부족합니다.");
-					printf("스파이스가 부족합니다( spice : %d )\n", resource->spice);
 					break;
 				}
 				else {
-					sys_text("하베스터를 생성하고 있습니다.");
-					resource->spice -= 5;
-					for (int i = 10; i > 1; i--)
-					{
-						printf("하베스터 생성까지 남은 시간 : %d", i);
+					// 생산 가능한 위치 찾기
+					if (!find_empty_space_near_base(&production_pos)) {
+						sys_text("하베스터를 생산할 공간이 없습니다.");
+						break;
 					}
-					printf("하베스터가 생성되었습니다 ( spice : %d -> %d )\n", resource->spice + 5, resource->spice); 
+
+					sys_text("하베스터를 생성중...");
+					resource->spice -= 5;
+
+					// 생산 시작
+					is_producing_harvester = true;
+					harvester_production_time = turn_counter + 500; // 10초 (50틱/초 기준)
 					break;
 				}
 			}
@@ -373,7 +620,7 @@ void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource) {
 
 	}
 
-	if (strcmp(info, "하베스터") == 0) {
+	if (strcmp(info, "아군 하베스터") == 0) {
 		gotoxy((POSITION) { cmd_map_pos.row, cmd_map_pos.column });
 		printf(" H : 자원 수확");
 		gotoxy((POSITION) { cmd_map_pos.row + 1, cmd_map_pos.column });
@@ -450,48 +697,12 @@ void cmd_map(char command_map[N_LAYER][CMD_HEIGHT][CMD_WIDTH]) {
 	}
 }
 
-void formation(int i, int j, char backbuf[MAP_HEIGHT][MAP_WIDTH]) {
-	if (backbuf[i][j] == 'P') {
-		set_color(BLACK);
-	}
-	else if (backbuf[i][j] == 'B') {
-		if (i == 16 || i == 15) {
-			set_color(BLUE);
-		}
-		else { set_color(DARK_RED); }
-	}
-	else if (backbuf[i][j] == 'H') {
-		if (i == 14) {
-			set_color(BLUE);
-			color_map[i][j] = BLUE;
-		}
-		else {
-			set_color(DARK_RED);
-			color_map[i][j] = DARK_RED;
-		}
-	}
-	else if (backbuf[i][j] == 'W') {
-		set_color(DARK_YELLOW);
-	}
-	else if (backbuf[i][j] == 'R') {
-		set_color(GRAY);
-	}
-	else if (backbuf[i][j] == 'S') {
-		set_color(RED);
-	}
-	else {
-		set_color(7);  // 기본 흰색
-	}
-}
-
-
 bool find_h_positions(POSITION* friend_h, POSITION* enemy_h) {
 	bool friend_found = false;
 	bool enemy_found = false;
 
 	for (int row = 0; row < MAP_HEIGHT; row++) {
 		for (int col = 0; col < MAP_WIDTH; col++) {
-			// 'H'가 있는지 확인하고 해당 좌표의 색상을 color_map에서 가져옴
 			if ((map[1][row][col] == 'H') && color_map[row][col] != 7) {
 				int color = color_map[row][col];
 
@@ -515,45 +726,144 @@ int has_reached_target(Sandworm sandworm, POSITION target) {
 	return sandworm.pos.row == target.row && sandworm.pos.column == target.column;
 }
 
+bool can_move_to(POSITION pos) {
+	// 맵 범위를 벗어나거나 바위가 있으면 이동 불가
+	if (pos.row < 1 || pos.row >= MAP_HEIGHT - 1 ||
+		pos.column < 1 || pos.column >= MAP_WIDTH - 1 ||
+		map[0][pos.row][pos.column] == 'R') {
+		return false;
+	}
+	return true;
+}
+
 void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
-	// 현재 위치 초기화 (화면에서 지우기)
+	// 목표가 없을 경우 랜덤 이동
+	if (target.row == -1 && target.column == -1) {
+		srand((unsigned int)time(NULL)); // 난수 초기화
+		POSITION random_moves[4] = {
+			{sandworm->pos.row - 1, sandworm->pos.column}, // 상
+			{sandworm->pos.row + 1, sandworm->pos.column}, // 하
+			{sandworm->pos.row, sandworm->pos.column - 1}, // 좌
+			{sandworm->pos.row, sandworm->pos.column + 1}  // 우
+		};
+
+		// 무작위로 이동 시도
+		for (int i = 0; i < 4; i++) {
+			int rand_index = rand() % 4; // 0~3 중 무작위 선택
+			POSITION next_move = random_moves[rand_index];
+
+			// 이전 위치와 충돌하지 않고 이동 가능하면 이동
+			if (next_move.row != sandworm->prev_pos.row || next_move.column != sandworm->prev_pos.column) {
+				if (can_move_to(next_move)) {
+					sandworm->prev_pos = sandworm->pos;
+					sandworm->pos = next_move;
+					map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
+					return;
+				}
+			}
+		}
+
+		sys_text("샌드웜이 이동할 수 있는 경로가 없습니다.");
+		return;
+	}
+
+	// 기존 로직 (목표가 있을 때)
 	map[1][sandworm->pos.row][sandworm->pos.column] = -1;
 
-	// 타겟까지의 가로/세로 거리 계산
-	int row_diff = target.row - sandworm->pos.row;
-	int col_diff = target.column - sandworm->pos.column;
-	// 이동 방향 결정
-	if (abs(row_diff) > abs(col_diff)) {
-		sandworm->pos.row += (row_diff > 0) ? 1 : -1;
-	}
-	else {
-		sandworm->pos.column += (col_diff > 0) ? 1 : -1;
+	POSITION moves[4] = {
+		{sandworm->pos.row - 1, sandworm->pos.column},    // 상
+		{sandworm->pos.row + 1, sandworm->pos.column},    // 하
+		{sandworm->pos.row, sandworm->pos.column - 1},    // 좌
+		{sandworm->pos.row, sandworm->pos.column + 1}     // 우
+	};
+
+	double min_dist = 99999.0;
+	POSITION best_move = sandworm->pos;
+
+	for (int i = 0; i < 4; i++) {
+		if (moves[i].row == sandworm->prev_pos.row &&
+			moves[i].column == sandworm->prev_pos.column) {
+			continue;
+		}
+
+		if (can_move_to(moves[i])) {
+			double next_dist = sqrt(pow(target.row - moves[i].row, 2) +
+				pow(target.column - moves[i].column, 2));
+
+			if (next_dist < min_dist) {
+				min_dist = next_dist;
+				best_move = moves[i];
+			}
+		}
 	}
 
-	// 새로운 위치 업데이트
+	sandworm->prev_pos = sandworm->pos;
+	sandworm->pos = best_move;
 	map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
 }
 
-void sand_mob(POSITION friend_h, POSITION enemy_h) {
-	// 좌상단 샌드웜과 하베스터 간 거리 계산
-	double friend_sandworm0 = sqrt(pow(friend_h.row - sandworms[0].pos.row, 2) + pow(friend_h.column - sandworms[0].pos.column, 2));
-	double enemy_sandworm0 = sqrt(pow(enemy_h.row - sandworms[0].pos.row, 2) + pow(enemy_h.column - sandworms[0].pos.column, 2));
+void sand_mob() {
+	HarvesterList harvesters = find_harvesters();
 
-	if (!has_reached_target(sandworms[0], friend_h) && friend_sandworm0 < enemy_sandworm0) {
-		move_sandworm_toward_target(&sandworms[0], friend_h);
+	for (int i = 0; i < 2; i++) {
+		Sandworm* sandworm = &sandworms[i];
+
+		// 모든 하베스터가 없으면 랜덤 이동
+		if (harvesters.friend_count == 0 && harvesters.enemy_count == 0) {
+			move_sandworm_toward_target(sandworm, (POSITION) { -1, -1 });
+			continue;
+		}
+
+		// 가장 가까운 하베스터 선택
+		POSITION closest_harvester = { -1, -1 };
+		double min_distance = 99999.0;
+
+		// 아군 하베스터 중 가장 가까운 것 찾기
+		for (int j = 0; j < harvesters.friend_count; j++) {
+			double distance = sqrt(pow(harvesters.friend_harvesters[j].row - sandworm->pos.row, 2) +
+				pow(harvesters.friend_harvesters[j].column - sandworm->pos.column, 2));
+			if (distance < min_distance) {
+				min_distance = distance;
+				closest_harvester = harvesters.friend_harvesters[j];
+			}
+		}
+
+		// 적군 하베스터 중 가장 가까운 것 찾기
+		for (int j = 0; j < harvesters.enemy_count; j++) {
+			double distance = sqrt(pow(harvesters.enemy_harvesters[j].row - sandworm->pos.row, 2) +
+				pow(harvesters.enemy_harvesters[j].column - sandworm->pos.column, 2));
+			if (distance < min_distance) {
+				min_distance = distance;
+				closest_harvester = harvesters.enemy_harvesters[j];
+			}
+		}
+
+		// 목표로 이동
+		move_sandworm_toward_target(sandworm, closest_harvester);
 	}
-	else if (!has_reached_target(sandworms[0], enemy_h)) {
-		move_sandworm_toward_target(&sandworms[0], enemy_h);
+}
+
+HarvesterList find_harvesters() {
+	HarvesterList harvester_list = { .friend_count = 0, .enemy_count = 0 };
+
+	for (int row = 0; row < MAP_HEIGHT; row++) {
+		for (int col = 0; col < MAP_WIDTH; col++) {
+			if (map[1][row][col] == 'H') {
+				if (color_map[row][col] == BLUE && harvester_list.friend_count < MAX_HARVESTERS) {
+					// 아군 하베스터
+					harvester_list.friend_harvesters[harvester_list.friend_count].row = row;
+					harvester_list.friend_harvesters[harvester_list.friend_count].column = col;
+					harvester_list.friend_count++;
+				}
+				else if (color_map[row][col] == DARK_RED && harvester_list.enemy_count < MAX_HARVESTERS) {
+					// 적군 하베스터
+					harvester_list.enemy_harvesters[harvester_list.enemy_count].row = row;
+					harvester_list.enemy_harvesters[harvester_list.enemy_count].column = col;
+					harvester_list.enemy_count++;
+				}
+			}
+		}
 	}
 
-	// 우하단 샌드웜과 하베스터 간 거리 계산
-	double friend_sandworm1 = sqrt(pow(friend_h.row - sandworms[1].pos.row, 2) + pow(friend_h.column - sandworms[1].pos.column, 2));
-	double enemy_sandworm1 = sqrt(pow(enemy_h.row - sandworms[1].pos.row, 2) + pow(enemy_h.column - sandworms[1].pos.column, 2));
-
-	if (!has_reached_target(sandworms[1], friend_h) && friend_sandworm1 < enemy_sandworm1) {
-		move_sandworm_toward_target(&sandworms[1], friend_h);
-	}
-	else if (!has_reached_target(sandworms[1], enemy_h)) {
-		move_sandworm_toward_target(&sandworms[1], enemy_h);
-	}
+	return harvester_list;
 }
