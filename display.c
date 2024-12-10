@@ -61,18 +61,30 @@ typedef struct {
 	int id;           // 고유 ID
 	POSITION pos;     // 현재 위치
 	POSITION prev_pos; // 이전 위치를 저장
+	bool is_digesting;  // 소화 중인지 여부
+	int digestion_start_time;  // 소화 시작 시간
+	int harvester_eaten;  // 먹은 하베스터 수
+	int undigested_count;  // 소화하지 않은 하베스터 수
 } Sandworm;
 
 Sandworm sandworms[2] = {
 	{ // 좌상단 샌드웜
 		.id = 1,
 		.pos = {3, 8},
-		.prev_pos = {3, 8}
+		.prev_pos = {3, 8},
+		.is_digesting = false,
+		.digestion_start_time = 0,
+		.harvester_eaten = 0,
+		.undigested_count = 0
 	},
 	{ // 우하단 샌드웜
 		.id = 2,
 		.pos = {13, 50},
-		.prev_pos = {13, 50}
+		.prev_pos = {13, 50},
+		.is_digesting = false,
+		.digestion_start_time = 0,
+		.harvester_eaten = 0,
+		.undigested_count = 0
 	}
 };
 
@@ -81,6 +93,9 @@ int harvester_production_time = 0;
 POSITION production_pos = { 0, 0 };
 
 bool is_showing_harvester_production;
+
+bool is_showing_worm_digestion = false;
+int selected_worm_id = -1;
 
 void display(
 	const RESOURCE* resource,
@@ -361,7 +376,7 @@ void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]) {
 		sys_text("하베스터가 생성되었습니다.");
 	}
 	// 하베스터 위치 찾기를 하베스터 생성 이후로 이동
-	if (turn_counter % 10 == 0) {  // 매 10틱마다
+	if (turn_counter % 30 == 0) {  // 매 10틱마다
 		sand_mob();  // 샌드웜 이동
 	}
 
@@ -427,7 +442,6 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 	// 하베스터 생산 정보를 표시하기로 했다면 계속 업데이트
 	if (is_showing_harvester_production && is_producing_harvester) {
 		static int last_shown_seconds = -1;  // 마지막으로 표시한 시간
-
 		// 남은 시간 계산
 		int remaining_ticks = harvester_production_time - turn_counter;
 		int remaining_seconds = remaining_ticks / 50;
@@ -442,6 +456,25 @@ void sta_map(char status_map[N_LAYER][STATUS_HEIGHT][STATUS_WIDTH]) {
 			last_shown_seconds = remaining_seconds;
 		}
 	}
+
+	// 샌드웜 소화 정보 표시
+	if (is_showing_worm_digestion) {
+		static int last_shown_digest_seconds = -1;
+		if (sandworms[selected_worm_id].is_digesting) {
+			int remaining_ticks = sandworms[selected_worm_id].digestion_start_time + 1500 - turn_counter;
+			int remaining_seconds = remaining_ticks / 50;
+
+			if (remaining_seconds != last_shown_digest_seconds) {
+				gotoxy((POSITION) { sta_map_pos.row + 2, sta_map_pos.column });
+				printf("소화까지 남은 시간: %d초    ", remaining_seconds);
+				last_shown_digest_seconds = remaining_seconds;
+			}
+		}
+		else {
+			is_showing_worm_digestion = false;
+		}
+	}
+
 
 	// 나머지 상태창 업데이트 (기존 버퍼 업데이트 코드)
 	for (int i = 0; i < STATUS_HEIGHT; i++) {
@@ -532,7 +565,23 @@ void display_info_in_sta_map(char ch, POSITION pos, RESOURCE* resource) {
 	case 'B': info = is_enemy_map[pos.row][pos.column] ? "적 진형" : "아군 진형"; break;
 	case 'R': info = "바위"; break; //나중에 2x2는 바위, 1x1은 돌맹이
 	case 'S': info = "스파이스"; break;
-	case 'W': info = "샌드웜"; break;
+	case 'W':
+		info = "샌드웜";
+		gotoxy((POSITION) { sta_map_pos.row, sta_map_pos.column });
+		printf("샌드웜");
+
+		// 현재 위치의 샌드웜 찾기
+		for (int i = 0; i < 2; i++) {
+			if (sandworms[i].pos.row == pos.row &&
+				sandworms[i].pos.column == pos.column) {
+				gotoxy((POSITION) { sta_map_pos.row + 1, sta_map_pos.column });
+				printf("잡아먹은 하베스터: %d", sandworms[i].harvester_eaten);
+				is_showing_worm_digestion = true;  // 샌드웜이 선택되었음을 표시
+				selected_worm_id = i;  // 선택된 샌드웜의 ID 저장
+				break;
+			}
+		}
+		break;
 	case 'H':
 		// 생성 중인 하베스터 처리를 먼저
 		// 생성 중인 하베스터 처리
@@ -772,6 +821,15 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
 			if ((next_move.row != sandworm->prev_pos.row ||
 				next_move.column != sandworm->prev_pos.column) &&
 				can_move_to(next_move)) {
+				// 이동하기 전에 하베스터 체크
+				if (map[1][next_move.row][next_move.column] == 'H') {
+					sandworm->harvester_eaten++;
+					sandworm->undigested_count++;
+					if (rand() % 2 == 0) {  // 50% 확률로 소화 시작
+						sandworm->is_digesting = true;
+						sandworm->digestion_start_time = turn_counter;
+					}
+				}
 				sandworm->prev_pos = sandworm->pos;
 				sandworm->pos = next_move;
 				map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
@@ -787,7 +845,7 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
 		return;
 	}
 
-	// 목표가 있을 때의 이동 로직도 같은 방식으로 수정
+	// 목표 이동 로직
 	POSITION moves[4] = {
 		{sandworm->pos.row - 1, sandworm->pos.column},
 		{sandworm->pos.row + 1, sandworm->pos.column},
@@ -814,6 +872,17 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
 	}
 
 	sandworm->prev_pos = sandworm->pos;
+
+	// 이동하기 전에 하베스터 체크
+	if (map[1][best_move.row][best_move.column] == 'H') {
+		sandworm->harvester_eaten++;
+		sandworm->undigested_count++;
+		if (rand() % 2 == 0) {
+			sandworm->is_digesting = true;
+			sandworm->digestion_start_time = turn_counter;
+		}
+	}
+
 	sandworm->pos = best_move;
 	map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
 }
@@ -830,17 +899,43 @@ void sand_mob() {
 	for (int i = 0; i < 2; i++) {
 		Sandworm* sandworm = &sandworms[i];
 
-		// 모든 하베스터가 없으면 랜덤 이동
+		// 1. 소화 중인지 체크
+		if (sandworm->is_digesting) {
+			if (turn_counter >= sandworm->digestion_start_time + 1500) {
+				sandworm->is_digesting = false;
+				map[0][sandworm->pos.row][sandworm->pos.column] = 'S';
+				sandworm->harvester_eaten--;  // 소화 완료 시 카운트 감소
+				sandworm->undigested_count--;  // 소화해야 할 하베스터 수 감소
+				sys_text("샌드웜이 하베스터를 소화했습니다.");
+
+				// 소화하지 않은 하베스터가 있으면 50% 확률로 바로 다음 소화 시작
+				if (sandworm->undigested_count > 0) {
+					if (rand() % 2 == 0) {  // 50% 확률로 다음 소화 시작
+						sandworm->is_digesting = true;
+						sandworm->digestion_start_time = turn_counter;
+						sys_text("샌드웜이 소화를 시작했습니다!");
+					}
+				}
+			}
+		}
+		// 소화 중이 아니고 소화해야 할 하베스터가 있으면 50% 확률로 소화 시작
+		else if (sandworm->undigested_count > 0 && (rand() % 2 == 0)) {
+			sandworm->is_digesting = true;
+			sandworm->digestion_start_time = turn_counter;
+			sys_text("샌드웜이 소화를 시작했습니다!");
+		}
+
+		// 2. 이동 목표 설정
 		if (harvesters.friend_count == 0 && harvesters.enemy_count == 0) {
 			move_sandworm_toward_target(sandworm, (POSITION) { -1, -1 });
 			continue;
 		}
 
-		// 가장 가까운 하베스터 선택
+		// 3. 가장 가까운 하베스터 찾기
 		POSITION closest_harvester = { -1, -1 };
 		double min_distance = 99999.0;
 
-		// 아군 하베스터 중 가장 가까운 것 찾기
+		// 아군 하베스터 체크
 		for (int j = 0; j < harvesters.friend_count; j++) {
 			double distance = sqrt(pow(harvesters.friend_harvesters[j].row - sandworm->pos.row, 2) +
 				pow(harvesters.friend_harvesters[j].column - sandworm->pos.column, 2));
@@ -850,7 +945,7 @@ void sand_mob() {
 			}
 		}
 
-		// 적군 하베스터 중 가장 가까운 것 찾기
+		// 적군 하베스터 체크
 		for (int j = 0; j < harvesters.enemy_count; j++) {
 			double distance = sqrt(pow(harvesters.enemy_harvesters[j].row - sandworm->pos.row, 2) +
 				pow(harvesters.enemy_harvesters[j].column - sandworm->pos.column, 2));
@@ -860,7 +955,7 @@ void sand_mob() {
 			}
 		}
 
-		// 목표로 이동
+		// 5. 목표를 향해 이동
 		move_sandworm_toward_target(sandworm, closest_harvester);
 	}
 }

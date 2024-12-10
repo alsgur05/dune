@@ -153,13 +153,6 @@ typedef struct {
 } HarvesterList;
 
 
-typedef struct {
-	int id;           // 고유 ID
-	POSITION pos;     // 현재 위치
-	POSITION prev_pos; // 이전 위치를 저장
-	bool is_digesting;  // 소화 중인지 여부
-	int digestion_start_time;  // 소화 시작 시간
-	int harvester_eaten;  // 먹은 하베스터 수
-} Sandworm;
+
 
 #endif
