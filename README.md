@@ -4,14 +4,14 @@
 @ 기능 추가 <br/>
 샌드웜이 스파이스를 배설할 때 배설하는 시간 카운트 (30초)
 
-#샌드웜 
+# 샌드웜 
 1. 샌드웜의 이동 주기
   - sys_map 함수에서 ( turn_counter % 30 == 0 ) 일 때 sand_mob() 호출
   - 30틱마다 이동
 
 ====================================================================================
 
-2. sand_mob 함수
+## 2. sand_mob 함수
 ```
 void sand_mob() {
     // 하베스터 목록을 가져옴
@@ -55,7 +55,7 @@ void sand_mob() {
 ```
 ====================================================================================
 
-3. move_sandworm_toward_target 함수
+## 3. move_sandworm_toward_target 함수
 ```
 void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
     // 현재 위치에서 샌드웜 제거
@@ -97,7 +97,7 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
 ```
 ====================================================================================
 
-4. check_and_eat_harvester 함수
+## 4. check_and_eat_harvester 함수
 ```
 void check_and_eat_harvester(Sandworm* sandworm, POSITION pos) {
     if (map[1][pos.row][pos.column] == 'H') {
