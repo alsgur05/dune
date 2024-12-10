@@ -270,9 +270,17 @@ void display_cursor(CURSOR cursor) {
 void initialize_harvester_colors() {
 	// 아군 하베스터 초기 위치 (i = 14, 15, 16)
 	POSITION friend_harvester_positions[] = {
+		{14, 1},
 		{14, 2},
 		{15, 3},
 		{16, 3}
+	};
+
+	POSITION enemy_harvester_positions[] = {
+		{3, 58},
+		{3, 57},
+		{2, 56},
+		{1, 56}
 	};
 
 	// 아군 하베스터 색상 설정
@@ -280,6 +288,13 @@ void initialize_harvester_colors() {
 		POSITION pos = friend_harvester_positions[i];
 		if (map[1][pos.row][pos.column] == 'H') {
 			color_map[pos.row][pos.column] = BLUE;
+		}
+	}
+
+	for (int i = 0; i < sizeof(enemy_harvester_positions) / sizeof(POSITION); i++) {
+		POSITION pos = enemy_harvester_positions[i];
+		if (map[1][pos.row][pos.column] == 'H') {
+			color_map[pos.row][pos.column] = DARK_RED;
 		}
 	}
 }
@@ -346,11 +361,8 @@ void sys_map(char system_map[N_LAYER][SYS_HEIGHT][SYS_WIDTH]) {
 		sys_text("하베스터가 생성되었습니다.");
 	}
 	// 하베스터 위치 찾기를 하베스터 생성 이후로 이동
-	POSITION friend_h, enemy_h;
-	if (find_h_positions(&friend_h, &enemy_h)) {
-		if (turn_counter % 10 == 0) {
-			sand_mob(friend_h, enemy_h); // 샌드웜 이동
-		}
+	if (turn_counter % 10 == 0) {  // 매 10틱마다
+		sand_mob();  // 샌드웜 이동
 	}
 
 	display_system_messages();
@@ -730,66 +742,70 @@ bool can_move_to(POSITION pos) {
 	// 맵 범위를 벗어나거나 바위가 있으면 이동 불가
 	if (pos.row < 1 || pos.row >= MAP_HEIGHT - 1 ||
 		pos.column < 1 || pos.column >= MAP_WIDTH - 1 ||
-		map[0][pos.row][pos.column] == 'R') {
+		map[0][pos.row][pos.column] == 'R'||
+		map[0][pos.row][pos.column] == '#'||
+		map[1][pos.row][pos.column] == 'B'||
+		map[0][pos.row][pos.column] == 'S') {
 		return false;
 	}
 	return true;
 }
 
 void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
+	// 현재 위치의 W 지우기
+	map[1][sandworm->pos.row][sandworm->pos.column] = -1;
+
 	// 목표가 없을 경우 랜덤 이동
 	if (target.row == -1 && target.column == -1) {
-		srand((unsigned int)time(NULL)); // 난수 초기화
 		POSITION random_moves[4] = {
-			{sandworm->pos.row - 1, sandworm->pos.column}, // 상
-			{sandworm->pos.row + 1, sandworm->pos.column}, // 하
-			{sandworm->pos.row, sandworm->pos.column - 1}, // 좌
-			{sandworm->pos.row, sandworm->pos.column + 1}  // 우
+			{sandworm->pos.row - 1, sandworm->pos.column},
+			{sandworm->pos.row + 1, sandworm->pos.column},
+			{sandworm->pos.row, sandworm->pos.column - 1},
+			{sandworm->pos.row, sandworm->pos.column + 1}
 		};
 
-		// 무작위로 이동 시도
+		bool moved = false;
 		for (int i = 0; i < 4; i++) {
-			int rand_index = rand() % 4; // 0~3 중 무작위 선택
+			int rand_index = (rand() + sandworm->id * 17) % 4;
 			POSITION next_move = random_moves[rand_index];
 
-			// 이전 위치와 충돌하지 않고 이동 가능하면 이동
-			if (next_move.row != sandworm->prev_pos.row || next_move.column != sandworm->prev_pos.column) {
-				if (can_move_to(next_move)) {
-					sandworm->prev_pos = sandworm->pos;
-					sandworm->pos = next_move;
-					map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
-					return;
-				}
+			if ((next_move.row != sandworm->prev_pos.row ||
+				next_move.column != sandworm->prev_pos.column) &&
+				can_move_to(next_move)) {
+				sandworm->prev_pos = sandworm->pos;
+				sandworm->pos = next_move;
+				map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
+				moved = true;
+				break;
 			}
 		}
 
-		sys_text("샌드웜이 이동할 수 있는 경로가 없습니다.");
+		// 이동할 수 없으면 현재 위치에 다시 W 표시
+		if (!moved) {
+			map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
+		}
 		return;
 	}
 
-	// 기존 로직 (목표가 있을 때)
-	map[1][sandworm->pos.row][sandworm->pos.column] = -1;
-
+	// 목표가 있을 때의 이동 로직도 같은 방식으로 수정
 	POSITION moves[4] = {
-		{sandworm->pos.row - 1, sandworm->pos.column},    // 상
-		{sandworm->pos.row + 1, sandworm->pos.column},    // 하
-		{sandworm->pos.row, sandworm->pos.column - 1},    // 좌
-		{sandworm->pos.row, sandworm->pos.column + 1}     // 우
+		{sandworm->pos.row - 1, sandworm->pos.column},
+		{sandworm->pos.row + 1, sandworm->pos.column},
+		{sandworm->pos.row, sandworm->pos.column - 1},
+		{sandworm->pos.row, sandworm->pos.column + 1}
 	};
 
 	double min_dist = 99999.0;
-	POSITION best_move = sandworm->pos;
+	POSITION best_move = sandworm->pos;  // 기본값으로 현재 위치 설정
 
 	for (int i = 0; i < 4; i++) {
 		if (moves[i].row == sandworm->prev_pos.row &&
 			moves[i].column == sandworm->prev_pos.column) {
 			continue;
 		}
-
 		if (can_move_to(moves[i])) {
 			double next_dist = sqrt(pow(target.row - moves[i].row, 2) +
 				pow(target.column - moves[i].column, 2));
-
 			if (next_dist < min_dist) {
 				min_dist = next_dist;
 				best_move = moves[i];
@@ -803,6 +819,12 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
 }
 
 void sand_mob() {
+	static bool first_run = true;
+	if (first_run) {
+		srand((unsigned int)time(NULL));
+		first_run = false;
+	}
+
 	HarvesterList harvesters = find_harvesters();
 
 	for (int i = 0; i < 2; i++) {
