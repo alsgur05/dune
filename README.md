@@ -10,6 +10,7 @@
 ====================================================================================
 
 2. sand_mob 함수
+```
 void sand_mob() {
     // 하베스터 목록을 가져옴
     HarvesterList harvesters = find_harvesters();
@@ -49,10 +50,11 @@ void sand_mob() {
         move_sandworm_toward_target(sandworm, closest);
     }
 }
-
+```
 ====================================================================================
 
 3. move_sandworm_toward_target 함수
+```
 void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
     // 현재 위치에서 샌드웜 제거
     map[1][sandworm->pos.row][sandworm->pos.column] = -1;
@@ -90,10 +92,11 @@ void move_sandworm_toward_target(Sandworm* sandworm, POSITION target) {
     // 새 위치에 샌드웜 표시
     map[1][sandworm->pos.row][sandworm->pos.column] = 'W';
 }
-
+```
 ====================================================================================
 
 4. check_and_eat_harvester 함수
+```
 void check_and_eat_harvester(Sandworm* sandworm, POSITION pos) {
     if (map[1][pos.row][pos.column] == 'H') {
         sandworm->harvester_eaten++;     // 먹은 수 증가
@@ -106,3 +109,4 @@ void check_and_eat_harvester(Sandworm* sandworm, POSITION pos) {
         }
     }
 }
+```
